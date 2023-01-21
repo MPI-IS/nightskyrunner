@@ -1,0 +1,4 @@
+frequency = 0.2
+field = 15
+goodbye = "{{ goodbye1 }}"
+

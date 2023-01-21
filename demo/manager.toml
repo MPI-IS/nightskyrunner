@@ -1,0 +1,21 @@
+[process_runner]
+class_runner = "nightskyrunner.tests.TestProcessRunner"
+class_config_getter = "nightskyrunner.config_toml.DynamicTomlConfigGetter"
+args = ["process_runner.toml"]
+[process_runner.kwargs]
+"vars" =  "vars.toml"
+
+[thread_runner]
+class_runner = "nightskyrunner.tests.TestThreadRunner"
+class_config_getter = "nightskyrunner.config_toml.DynamicTomlConfigGetter"
+args = ["thread_runner.toml"]
+[thread_runner.kwargs]
+"vars" =  "vars.toml"
+
+[status_runner]
+class_runner = "nightskyrunner.tests.TestStatusRunner"
+class_config_getter = "nightskyrunner.config_toml.DynamicTomlConfigGetter"
+args = ["status_runner.toml"]
+
+
+

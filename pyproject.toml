@@ -1,0 +1,65 @@
+[tool.poetry]
+name = "nightskyrunner"
+version = "0.1.0"
+description = ""
+authors = ["Vincent Berenz"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+# Normal dependencies:
+# Installable with both poetry and pip.
+tomli = "^2.0.1"
+jinja2 = "^3.1.3"
+toml = "^0.10.2"
+tomli-w = "^1.0.0"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+# Dependencies for development:
+# Only installable with poetry (NOT pip).
+ipython = "8.12.3"
+black = "^24.2.0"
+autopep8 = "^2.0.4"
+flake8 = "^7.0.0"
+types-toml = "^0.10.8.7"
+isort = "^5.13.2"
+mypy = "^1.8.0"
+pytest = "^8.3.3"
+
+[tool.poetry.group.doc]
+optional = true
+
+[tool.poetry.group.doc.dependencies]
+# Dependencies for building documentation:
+# Only installable with poetry (NOT pip).
+mkdocs = "^1.5.3"
+mkdocstrings = {extras = ["python"], version = "^0.24.0"}
+mkdocs-material = "^9.5.11"
+
+[tool.poetry.group.test]
+optional = true
+
+[tool.poetry.group.test.dependencies]
+# Dependencies for testing:
+# Only installable with poetry (NOT pip).
+pytest = "^8.0.1"
+coverage = "^7.6.1"
+coverage2clover = "^4.0.0"
+typing-extensions = "^4.12.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+# Coverage.
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true

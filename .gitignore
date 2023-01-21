@@ -1,0 +1,8 @@
+*~
+build
+site
+__pycache__
+*.egg-info
+*flycheck*.py
+.mypy_cache
+venv

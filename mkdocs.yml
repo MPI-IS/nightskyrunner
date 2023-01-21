@@ -1,0 +1,41 @@
+site_name: nightskyrunner
+
+theme:
+  name: "material"
+  logo: assets/mpi-is.png
+  palette:
+    primary: custom
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.footer
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+
+repo_url: https://gitlab.is.tue.mpg.de/allsky/nightskyrunner
+repo_name: MPI-IS/nightskyrunner
+
+copyright: Copyright &copy; 2024 Max Planck Society
+
+extra_css:
+ - stylesheets/extra.css
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_submodules: true
+
+nav:
+ - documentation: index.md
+ - API: references.md
