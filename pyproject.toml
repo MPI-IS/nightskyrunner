@@ -1,0 +1,24 @@
+[project]
+name = "nightskyrunner"
+dynamic = ["readme", "version"]
+requires-python = ">=3.10"
+
+[tool.setuptools.dynamic]
+readme = {file = "README.md"}
+version = {attr = "nightskyrunner.version.__version__"}
+
+[tool.setuptools]
+packages = ["nightskyrunner"]
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = [
+    "nightskyrunner/version.py",
+    "tests/*"]
+
+[tool.coverage.report]
+show_missing = true
