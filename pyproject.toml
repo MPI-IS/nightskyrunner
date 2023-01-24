@@ -1,24 +1,14 @@
-[project]
+[tool.poetry]
 name = "nightskyrunner"
-dynamic = ["readme", "version"]
-requires-python = ">=3.10"
+version = "0.1.0"
+description = ""
+authors = ["Vincent Berenz <vberenz@tuebingen.mpg.de>"]
+readme = "README.md"
 
-[tool.setuptools.dynamic]
-readme = {file = "README.md"}
-version = {attr = "nightskyrunner.version.__version__"}
+[tool.poetry.dependencies]
+python = "^3.10"
 
-[tool.setuptools]
-packages = ["nightskyrunner"]
 
-[tool.mypy]
-ignore_missing_imports = true
-
-[tool.coverage.run]
-branch = true
-source = ["."]
-omit = [
-    "nightskyrunner/version.py",
-    "tests/*"]
-
-[tool.coverage.report]
-show_missing = true
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

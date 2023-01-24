@@ -37,15 +37,14 @@ Examples:
 import copy
 import threading
 from functools import wraps
-from typing import Any, Optional, Type, cast, TypeVar
+from typing import Any, Optional, Type, cast, TypeVar, Union
 
 
 def _do_lock(method):
     @wraps(method)
-    def _impl(self):
+    def _impl(self, *args, **kwargs):
         with self._lock:
-            method(self)
-
+            return method(self, *args, **kwargs)
     return _impl
 
 
@@ -64,7 +63,8 @@ class MemoryItem:
         """
         Returns a deep copy of the data
         """
-        return copy.deepcopy(self._data)
+        r = copy.deepcopy(self._data)
+        return r
 
     @_do_lock
     def set(self, data) -> None:
@@ -73,11 +73,13 @@ class MemoryItem:
         """
         self._data = copy.deepcopy(data)
 
-
 class access:
     """
     Context manager for accessing in a thread safe manner
-    the (mutable) data of an instance of MemoryItem.
+    the data of an instance of MemoryItem.
+
+    Args:
+      An instance of memory item which data is mutable
     """
 
     def __init__(self, memory_item: MemoryItem) -> None:
@@ -92,6 +94,8 @@ class access:
         self._lock.release()
 
 
+# for the the SharedMemory._new method to support both
+# MemoryItem and SharedMemory as argument / return type
 _Element = TypeVar("_Element", MemoryItem, "SharedMemory")
 
 
@@ -102,9 +106,9 @@ class SharedMemory:
     """
 
     def __init__(self) -> None:
-        self._d: dict[str, MemoryItem | "SharedMemory"]
+        self._d: dict[str, MemoryItem | "SharedMemory"] = {}
         self._lock = threading.Lock()
-
+        
     def _new(
         self,
         key: str,
@@ -164,7 +168,7 @@ class SharedMemory:
         """
         return self._new(key, cast(Type[MemoryItem], MemoryItem), exists_ok)
 
-    def __getitem__(self, key: str) -> "SharedMemory" | MemoryItem:
+    def __getitem__(self, key: str) -> Union["SharedMemory", MemoryItem]:
         """
         Returns the instance stored under the key.
 
@@ -186,3 +190,10 @@ def root() -> SharedMemory:
     """
     global _memory
     return _memory
+
+def clear() -> None:
+    """
+    clear the global shared memory
+    """
+    global _memory
+    _memory = SharedMemory()
