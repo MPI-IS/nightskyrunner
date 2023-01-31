@@ -45,6 +45,7 @@ def _do_lock(method):
     def _impl(self, *args, **kwargs):
         with self._lock:
             return method(self, *args, **kwargs)
+
     return _impl
 
 
@@ -72,6 +73,7 @@ class MemoryItem:
         Set the data
         """
         self._data = copy.deepcopy(data)
+
 
 class access:
     """
@@ -108,7 +110,7 @@ class SharedMemory:
     def __init__(self) -> None:
         self._d: dict[str, MemoryItem | "SharedMemory"] = {}
         self._lock = threading.Lock()
-        
+
     def _new(
         self,
         key: str,
@@ -130,7 +132,7 @@ class SharedMemory:
                 )
             if not exists_ok:
                 raise ValueError(f"'sub' shared memory at key {key} " "already exists")
-            return r
+            return item
 
     def sub(self, key: str, exists_ok: bool = False) -> "SharedMemory":
         """
@@ -190,6 +192,7 @@ def root() -> SharedMemory:
     """
     global _memory
     return _memory
+
 
 def clear() -> None:
     """
