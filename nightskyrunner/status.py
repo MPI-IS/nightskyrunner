@@ -1,8 +1,9 @@
 import logging
 import threading
+from functools import wraps
 from enum import Enum
 from datetime import datetime
-from typing import overload, Optional, Callable, Any, Union, Literal
+from typing import Optional, Callable, Any
 from . import shared_memory as sm
 
 
@@ -65,10 +66,20 @@ class Level(Enum):
 
 
 def _set_sm(method):
+    # 'self' is an instance of Status.
+    # (i.e. 'method' is a method of Status
+    #        and _sm_item is an attribute of
+    #        Status)
+    # This decorator ensure that the instance
+    # of status is saved to the shared memory
+    # upon the call to method.
     @wraps(method)
     def _impl(self, *args, **kwargs):
-        method(args, kwargs)
-        self._sm_item.set(copy.deepcopy(self))
+        method(self, *args, **kwargs)
+        item = (
+            sm.root().sub(self.sm_key, exists_ok=True).item(self._name, exists_ok=True)
+        )
+        item.set(self)
 
     return _impl
 
@@ -88,7 +99,12 @@ class NoSuchStatusError(Exception):
         )
 
 
-Callback = Callable[[str, str], Any]
+Callback = Callable[[str, str], None]
+"""
+Callback for Status. First argument is the status name,
+
+the second an arbitrary string.
+"""
 Callbacks = list[Callback]
 
 
@@ -155,14 +171,11 @@ class Status(Timed):
             State.error: Level.error,
         },
     ) -> None:
-        super().__init__()
+        super().__init__()  # Timed
         self._name = name
         self._state_level = state_level
         self._entries: dict[str, str] = {}
         self._state = State.off
-        self._sm_item = (
-            sm.root().sub(self.sm_key, exists_ok=True).item(self._name, exists_ok=False)
-        )
         self._message: Optional[str] = None
         self.start()
 
@@ -224,7 +237,7 @@ class Status(Timed):
         elif state in (state.off, state.error):
             self.reset()
         if state == state.running:
-            self.value(f"running for {self.duration()}", level=None)
+            self.value("running for", self.duration(), level=None)
         status_change = f"{self._state}.name->{state}.name"
         self._state = state
         try:
@@ -244,6 +257,7 @@ class Status(Timed):
         except KeyError:
             self._entries[key] = value
             previous = value
+        self._entries[key] = value
         if previous != value and level:
             self._call_callbacks(f"{key} set to {value}", level)
 

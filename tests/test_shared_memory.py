@@ -30,7 +30,6 @@ def test_set_get(reset_memory):
     m1 = memory.sub("m1")
     item1 = m1.item("item1")
     item1.set(value)
-    r = item1.get()
     assert item1.get() == value
     assert memory["m1"]["item1"].get() == value
 
@@ -56,6 +55,8 @@ def test_thread_safe(reset_memory):
 
     def long_access(item: sm.MemoryItem):
         with sm.access(item) as data:
+            if data is None:
+                return
             data["value"] = 2
             time.sleep(0.2)
 

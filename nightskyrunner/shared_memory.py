@@ -212,7 +212,7 @@ class SharedMemory:
             )
         return v
 
-    
+
 _memory = SharedMemory()
 
 
