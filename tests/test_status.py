@@ -5,7 +5,12 @@ Unit tests of the status module
 import pytest
 from typing import Generator
 from nightskyrunner import shared_memory as sm
-from nightskyrunner.status import Status, State, Level
+from nightskyrunner.status import (
+    Status,
+    State,
+    Level,
+    NoSuchStatusError
+)
 
 
 @pytest.fixture
@@ -105,3 +110,13 @@ def test_callbacks(reset_memory):
     assert Count.info == 4
     assert Count.warning == 3
     assert Count.error == 0
+
+
+def test_retrieve_error(reset_memory):
+    """
+    Testing retrieving an non existing status
+    raises an exception
+    """
+    with pytest.raises(NoSuchStatusError):
+        Status.retrieve("not_existing")
+    
