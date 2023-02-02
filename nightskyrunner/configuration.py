@@ -4,33 +4,20 @@ from typing import Any, Type, Optional
 
 Checker = Callable[[Any],Optional[Exception]]
 
-class ConfigField:
+class _Checker:
+    def __init__(self,method,kwargs)->None:
+        self._method = method
+        self._kwargs = kwargs
+    def __call__(self, name:str, value: Any)->None:
+        return self._method(value,**self._kwargs)
 
-    def __init__(
-            self,
-            name: str,
-            optional: bool = False,
-            checkers: Union[Checker,Iterable[Checker]]=[]
-    )->None:
-        self._name = name
-        self._optional = optional
-        self._checkers = checkers
+def checker(method):
+    def impl(**kwargs)->callable:  
+        # args should be empty ! throw
+        # exception if not
+        return _Checker(method,kwargs)  # callable because __call__
+    return impl
 
-    def check(self, value: Any)->dict[str, Exception]:
-        r: dict[str,Exception] = {}
-        for checker in self._checkers:
-            try:
-                checker(value)
-            except Exception as e:
-                r[name] = e
-        return r
-
-    def mandatory(self)->bool:
-        return not self._optional
-
-# ???
-a = ConfigField("a", is_directory(create=True))
-    
 
 def _wrong_type(name: str, value: Any, types: Iterable[Type])->None:
     type_str = ", ".join([str(t) for t in types])
@@ -38,7 +25,24 @@ def _wrong_type(name: str, value: Any, types: Iterable[Type])->None:
         f"configuration field {name} should be of type {type_str}, "
         f"got {type(value)}"
     )
-    
+
+@checker
+def optional(name: str, value: Any)->None:
+    if value is None:
+        raise ValueError()
+
+@checker
+def isint(name: str, value: Any)->None:
+    return _wrong_type(name,value,(int,))
+
+@checker
+def minmax(name: str, value: Any, vmin=-sys.maxsize, vmax: sys.maxsize)->None:
+    if value < vmin:
+        raise ValueError()
+    if value > vmax:
+        raise ValueError()
+
+@checker
 def is_directory(name: str, value: Any, create: bool=False)->None:
     if isinstance(value,str):
         value = Path(value)
@@ -58,38 +62,25 @@ def is_directory(name: str, value: Any, create: bool=False)->None:
     
     
         
-class ConfigurationChecker:
+# example:
+
+config_fields = {
+    'a': (is_directory(create=True), optional()),
+    'b': (isint(), minmax(vmin=-1,vmax=1)),
+}
+
+class Configuration:
+
     def __init__(
             self,
-            fields: Iterable[ConfigField]
+            config_fields
     )->None:
-        names = [f._name for f in fields]
-        counter = Counter(names)
-        for name,count in counter.items():
-            if count>1:
-                raise ValueError(
-                    f"configuration field {name} "
-                    "is defined more than once"
-                )
-        self._fields: dict[str,ConfigField] = {f._name:f for f in fields}
-        self._mandatory: list[str] = [
-            name for name,config_field in self._fields.items()
-            if config_field.mandatory()
-        ]
+        self._config_fields = config_fields
+
+    def check(self, config: dict[str,Any])->None:
+        for name, value in config.items():
+            checks = self._config_fields[name]
+            for check in checks:
+                check(name,value)
+            
         
-    def check(self, config_values: dict[str,any])->dict[str,Exception]:
-        r: dict[str,Exception] = {}
-        for name, value in config_values.items():
-            try:
-                config_field = self._fields[name]
-            except KeyError:
-                r[name] = NameError(f"not support configuration field: {name}")
-            else:
-                try:
-                    config_field.check(value)
-                except Exception as e:
-                    r[name]=e
-        for name in self._mandatory:
-            if not name in config_values.keys():
-                r[name] = 
-        return r
