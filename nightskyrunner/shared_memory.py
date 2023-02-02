@@ -178,11 +178,41 @@ class SharedMemory:
           KeyError if no instance under this key.
         """
         with self._lock:
-            if key not in self._d:
-                raise KeyError(key)
             return self._d[key]
 
+    def get_memory(self, key: str) -> "SharedMemory":
+        """
+        Returns the instance of SharedMemory stored under the key.
 
+        Raises:
+          KeyError if no instance under this key.
+          ValueError if the key maps to an instance of MemoryItem.
+        """
+        v = self._d[key]
+        if isinstance(v, MemoryItem):
+            raise ValueError(
+                f"the key {key} is not mapped to a sub-shared memory, "
+                "but to an instance of MemoryItem"
+            )
+        return v
+
+    def get_item(self, key: str) -> MemoryItem:
+        """
+        Returns the instance of Memory stored under the key.
+
+        Raises:
+          KeyError if no instance under this key.
+          ValueError if the key maps to an instance of SharedMemory.
+        """
+        v = self._d[key]
+        if not isinstance(v, MemoryItem):
+            raise ValueError(
+                f"the key {key} is not mapped to an instance of MemoryItem, "
+                "but to an instance of SharedMemory"
+            )
+        return v
+
+    
 _memory = SharedMemory()
 
 
