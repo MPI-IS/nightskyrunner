@@ -2,7 +2,31 @@ from pathlib import Path
 from typing import Any, Type, Optional, Protocol
 
 class ConfigurationValueError(Exception):
+    """
+    To be raised when the user provided an incorrect input(s) for
+    configuration field(s).
 
+    Once an instance has been created, it is possible to add to it
+    other instances. Once can then iterate over the errors:
+
+    ```python
+    error = ConfigurationError("threshold", -1.1, "value must be positive")
+    error.add(ConfigurationError("threshold", -1.1, "value must be an integer")
+
+    for name, value, message:
+        print(f"field {name}: unsupported value {value}: {message}")
+
+    # prints: 
+    # field threshold: unsupported value -1.1: value must be positive
+    # field threshold: unsupported value -1.1: value must be an integer
+    ```
+
+    Args:
+      name: name of the field
+      value: the value entered by the user
+      message: why this value is not suitable
+    """
+    
     def __init__(
             self,
             name: Optional[str]=None,
@@ -14,10 +38,20 @@ class ConfigurationValueError(Exception):
             self._errors[name] = (value, message)
 
     def add(self, other: "ConfigurationValueError")->None:
+        """
+        Append another error
+        """
         for name, value, message in other:
             self._errors[name] = (value, message)
 
     def __iter__(self)->Generator[tuple[str,Any,str],None,None]:
+        """
+        Generator for iterating over the errors.
+
+        Yields:
+            Tuple: name of the field, user entered value, 
+              why this value can not be accepted
+        """
         for name, (value, message) in self._errors:
             yield (name, value, message)
         return None
@@ -29,6 +63,18 @@ class ConfigurationValueError(Exception):
     
 
 class CheckerMethod(Protocol):
+    """
+    Interface for a checker method.
+    
+    Args:
+      name: name of the configuration fields
+      value: value entered by the user
+      kwargs: configuration of the checker method
+
+    Raises:
+      ConfigurationError if the value entered by the user 
+        is not suitable
+    """
     def __call__(self, name: str, value: Any, **kwargs: Any)->None:
         ...
 
@@ -42,6 +88,21 @@ class _Checker:
 
     
 def checker(method: CheckerMethod):
+    """
+    Decorator for configuration checker functions.
+    Returns a partial function that do not take the name and
+    value as argument. 
+
+    For example:
+
+    @checker
+    def above_threshold(name: str, value: Any, threshold: float=0)->None:
+        if value<=threshold:
+            raise ConfigurationError(name, value, f"under the threshold ({threshold})")
+    
+    # config_check can be used to check the inputs of several values for field1
+    config_check = { "field1" : above_threshold(threshold=5) }
+    """
     def impl(**kwargs)->callable:  
         return _Checker(method,kwargs)  # callable because __call__
     return impl
@@ -58,10 +119,16 @@ def optional(name: str, value: Any)->None:
 
 @checker
 def isint(name: str, value: Any)->None:
+    """
+    Raises a ConfigurationError is value is not an integer.
+    """
     return _wrong_type(name,value,(int,))
 
 @checker
 def minmax(name: str, value: Any, vmin=-sys.maxsize, vmax: sys.maxsize)->None:
+    """
+    Raises a ConfigurationError if value is not in the internval vmin, vmax.
+    """
     if value < vmin:
         raise ConfigurationValueError(name, value, "value should be in [{vmin}, {vmax}]")
     if value > vmax:
@@ -69,6 +136,11 @@ def minmax(name: str, value: Any, vmin=-sys.maxsize, vmax: sys.maxsize)->None:
 
 @checker
 def is_directory(name: str, value: Any, create: bool=False)->None:
+    """"
+    Raises a ConfigurationError if value is not a directory.
+    If create is True, this method will attempt to create the directory
+    if it does not exists.
+    """
     if isinstance(value,str):
         value = Path(value)
     if not isinstance(value,Path):
