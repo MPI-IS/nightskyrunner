@@ -1,5 +1,46 @@
-from typing import Any, Optional, Generator, Iterable, Callable
+"""
+Module implementing code for checking if a configuration dictionary is valid under rules
+specified by the developer.
 
+Developers can create a template expressing the rules a configuration dictionary must
+enforce to be valid, e.g.
+
+``` python
+    @checker
+    def is_above(name: str, value: Any, threshold=1.0)->None:
+        if value<threshold:
+            raise ConfigurationValueError(name, value, f"under the threshold {threshold}")
+
+    @checker is_float(name: str, value: float)->None:
+        if not isinstance(float, value):
+            raise ConfigurationValueError(name, value, f"value must be a float")
+
+    template = {
+        "field1": (is_float(), is_above(threshold=2.)),
+        "field2": (is_float(),)
+    }
+
+    config_ok = {
+        "field1": 3.0,
+        "field2": 1.3
+    }
+    check_configuration(template, config_ok)
+
+    # raises a ConfigurationValueError:
+    config_not_ok = {
+        "field1": -1.0,  # below threshold of 2 !
+        "field2": 1.3
+    }
+    check_configuration(template, config_not_ok)
+```
+
+See the configcheckers module for reusable checker methods.
+"""
+
+
+
+from typing import Any, Optional, Generator, Iterable, Callable
+from .config import Config
 
 class ConfigurationValueError(Exception):
     """
@@ -122,14 +163,23 @@ def checker(method: CheckerMethod):
     return impl
 
 
-Config = dict[str, Any]
 ConfigTemplate = dict[str, Iterable[CheckerMethod]]
-
+"""
+A template is a dictionary allowing the developer to specify the 
+criterion a configuration dictionary must apply to be valid.
+"""
 
 def check_configuration(
     template: ConfigTemplate,
     config: Config,
 ) -> None:
+    """
+    Check that the configuration is valid under the provided template.
+
+    Raises:
+      A ConfigurationValueError is any of the configuration field is invalid,
+      missing or superfluous.
+    """
 
     _errors: Optional[ConfigurationValueError] = None
 
