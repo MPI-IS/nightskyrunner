@@ -1,5 +1,5 @@
-from pathlib import Path
-from typing import Any, Type, Optional, Protocol, Generator, Iterable, Callable
+from typing import Any, Optional, Generator, Iterable, Callable
+
 
 class ConfigurationValueError(Exception):
     """
@@ -16,7 +16,7 @@ class ConfigurationValueError(Exception):
     for name, value, message:
         print(f"field {name}: unsupported value {value}: {message}")
 
-    # prints: 
+    # prints:
     # field threshold: unsupported value -1.1: value must be positive
     # field threshold: unsupported value -1.1: value must be an integer
     ```
@@ -26,30 +26,35 @@ class ConfigurationValueError(Exception):
       value: the value entered by the user
       message: why this value is not suitable
     """
-    
+
     def __init__(
-            self,
-            name: Optional[str]=None,
-            value: Optional[Any]=None,
-            message: Optional[str]=None
-    )->None:
-        self._errors: dict[str,tuple[Optional[Any],Optional[str]]] = {}
+        self,
+        name: Optional[str] = None,
+        value: Optional[Any] = None,
+        message: Optional[str] = None,
+    ) -> None:
+        self._errors: dict[str, tuple[Optional[Any], Optional[str]]] = {}
         if name is not None:
             self._errors[name] = (value, message)
 
-    def add(self, other: "ConfigurationValueError")->None:
+    def __len__(self) -> int:
+        return len(self._errors)
+
+    def add(self, other: "ConfigurationValueError") -> None:
         """
         Append another error
         """
         for name, value, message in other:
             self._errors[name] = (value, message)
 
-    def __iter__(self)->Generator[tuple[str,Optional[Any],Optional[str]],None,None]:
+    def __iter__(
+        self,
+    ) -> Generator[tuple[str, Optional[Any], Optional[str]], None, None]:
         """
         Generator for iterating over the errors.
 
         Yields:
-            Tuple: name of the field, user entered value, 
+            Tuple: name of the field, user entered value,
               why this value can not be accepted
         """
         name: str
@@ -61,40 +66,41 @@ class ConfigurationValueError(Exception):
 
     def __str__(self):
         return ", ".join(
-            [f"{name} ({value}): {message}" for name,value,message in self]
+            [f"{name} ({value}): {message}" for name, value, message in self]
         )
-    
 
-class CheckerMethod(Protocol):
-    """
-    Interface for a checker method.
-    
-    Args:
-      name: name of the configuration fields
-      value: value entered by the user
-      kwargs: configuration of the checker method
 
-    Raises:
-      ConfigurationError if the value entered by the user 
-        is not suitable
-    """
-    def __call__(self, name: str, value: Any, **kwargs: Any)->None:
-        ...
+CheckerMethod = Callable[[str, Any], None]
+"""
+Interface for a checker method.
 
-    
+Args:
+  name: name of the configuration fields
+  value: value entered by the user
+  kwargs: configuration of the checker method
+
+Raises:
+  ConfigurationError if the value entered by the user
+    is not suitable
+"""
+
+
 class _Checker:
-    def __init__(self,method: CheckerMethod, kwargs)->None:
+    def __init__(self, method: CheckerMethod, kwargs) -> None:
         self._method = method
         self._kwargs = kwargs
-    def __call__(self, name:str, value: Any)->None:
-        return self._method(value,**self._kwargs)
 
-    
+    def __call__(self, name: str, value: Any) -> None:
+        # note: this function follows the "CheckerMethod"
+        # type
+        return self._method(name, value, **self._kwargs)
+
+
 def checker(method: CheckerMethod):
     """
     Decorator for configuration checker functions.
     Returns a partial function that do not take the name and
-    value as argument. 
+    value as argument.
 
     For example:
 
@@ -102,56 +108,60 @@ def checker(method: CheckerMethod):
     def above_threshold(name: str, value: Any, threshold: float=0)->None:
         if value<=threshold:
             raise ConfigurationError(name, value, f"under the threshold ({threshold})")
-    
+
     # config_check can be used to check the inputs of several values for field1
     config_check = { "field1" : above_threshold(threshold=5) }
+
+    # above_threshold can be called:
+    above_threshold(threshold=1.)("field1",1.2)
     """
-    def impl(**kwargs)->Callable:
-        return _Checker(method,kwargs)  # callable because __call__
+
+    def impl(**kwargs) -> CheckerMethod:
+        return _Checker(method, kwargs)  # callable because __call__
+
     return impl
 
 
-def _wrong_type(name: str, value: Any, types: Iterable[Type])->None:
-    type_str = ", ".join([str(t) for t in types])
-    raise ConfigurationValueError(name, value, f"wrong type (got {type(value)}, expect {type_str})")
+Config = dict[str, Any]
+ConfigTemplate = dict[str, Iterable[CheckerMethod]]
 
-@checker
-def optional(name: str, value: Any)->None:
-    if value is None:
-        raise ConfigurationValueError(name, value, "configuration missing (required)")
 
-@checker
-def isint(name: str, value: Any)->None:
-    """
-    Raises a ConfigurationError is value is not an integer.
-    """
-    return _wrong_type(name,value,(int,))
+def check_configuration(
+    template: ConfigTemplate,
+    config: Config,
+) -> None:
 
-@checker
-def minmax(name: str, value: Any, vmin=-sys.maxsize, vmax= sys.maxsize)->None:
-    """
-    Raises a ConfigurationError if value is not in the internval vmin, vmax.
-    """
-    if value < vmin:
-        raise ConfigurationValueError(name, value, "value should be in [{vmin}, {vmax}]")
-    if value > vmax:
-        raise ConfigurationValueError(name, value, "value should be in [{vmin}, {vmax}]")
+    _errors: Optional[ConfigurationValueError] = None
 
-@checker
-def is_directory(name: str, value: Any, create: bool=False)->None:
-    """"
-    Raises a ConfigurationError if value is not a directory.
-    If create is True, this method will attempt to create the directory
-    if it does not exists.
-    """
-    if isinstance(value,str):
-        value = Path(value)
-    if not isinstance(value,Path):
-        _wrong_type(name, value, (str,Type[Path]))
-    if not value.exists():
-        if create:
-            value.mkdirs(parent=True)
-            return
-        raise ConfigurationValueError(name, value, "directory not found")
-    if not value.is_dir():
-        raise ConfigurationValueError(name, value, "not a directory")
+    def add_error(
+        _errors: Optional[ConfigurationValueError], error: ConfigurationValueError
+    ) -> ConfigurationValueError:
+        if _errors is None:
+            _errors = error
+        else:
+            _errors.add(error)
+        return _errors
+
+    for name, value in config.items():
+        try:
+            checkers = template[name]
+        except KeyError:
+            _errors = add_error(
+                _errors,
+                ConfigurationValueError(name, None, "no such configuration field"),
+            )
+        else:
+            checker: CheckerMethod
+            for checker in checkers:
+                try:
+                    checker(name, value)
+                except ConfigurationValueError as cav:
+                    _errors = add_error(_errors, cav)
+
+    for name in template:
+        if name not in config:
+            error = ConfigurationValueError(name, None, "missing configuration value")
+            _errors = add_error(_errors, error)
+
+    if _errors is not None:
+        raise _errors

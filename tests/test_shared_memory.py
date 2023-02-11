@@ -84,5 +84,3 @@ def test_raise_if_exists(reset_memory):
     sm.root().sub("sub", exists_ok=True)
     with pytest.raises(ValueError):
         sm.root().sub("sub", exists_ok=False)
-
-        
