@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Type, Optional, Protocol
+from typing import Any, Type, Optional, Protocol, Generator, Iterable, Callable
 
 class ConfigurationValueError(Exception):
     """
@@ -44,7 +44,7 @@ class ConfigurationValueError(Exception):
         for name, value, message in other:
             self._errors[name] = (value, message)
 
-    def __iter__(self)->Generator[tuple[str,Any,str],None,None]:
+    def __iter__(self)->Generator[tuple[str,Optional[Any],Optional[str]],None,None]:
         """
         Generator for iterating over the errors.
 
@@ -52,7 +52,10 @@ class ConfigurationValueError(Exception):
             Tuple: name of the field, user entered value, 
               why this value can not be accepted
         """
-        for name, (value, message) in self._errors:
+        name: str
+        value: Optional[Any]
+        message: Optional[str]
+        for name, (value, message) in self._errors.items():
             yield (name, value, message)
         return None
 
@@ -103,7 +106,7 @@ def checker(method: CheckerMethod):
     # config_check can be used to check the inputs of several values for field1
     config_check = { "field1" : above_threshold(threshold=5) }
     """
-    def impl(**kwargs)->callable:  
+    def impl(**kwargs)->Callable:
         return _Checker(method,kwargs)  # callable because __call__
     return impl
 
@@ -125,7 +128,7 @@ def isint(name: str, value: Any)->None:
     return _wrong_type(name,value,(int,))
 
 @checker
-def minmax(name: str, value: Any, vmin=-sys.maxsize, vmax: sys.maxsize)->None:
+def minmax(name: str, value: Any, vmin=-sys.maxsize, vmax= sys.maxsize)->None:
     """
     Raises a ConfigurationError if value is not in the internval vmin, vmax.
     """
