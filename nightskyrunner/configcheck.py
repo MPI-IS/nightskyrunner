@@ -38,9 +38,9 @@ See the configcheckers module for reusable checker methods.
 """
 
 
-
 from typing import Any, Optional, Generator, Iterable, Callable
 from .config import Config
+
 
 class ConfigurationValueError(Exception):
     """
@@ -168,6 +168,7 @@ ConfigTemplate = dict[str, Iterable[CheckerMethod]]
 A template is a dictionary allowing the developer to specify the 
 criterion a configuration dictionary must apply to be valid.
 """
+
 
 def check_configuration(
     template: ConfigTemplate,
