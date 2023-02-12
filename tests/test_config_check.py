@@ -102,3 +102,95 @@ def test_check_configuration():
         del config5["b"]
         with pytest.raises(configcheck.ConfigurationValueError):
             configcheck.check_configuration(template, config5)
+
+
+def test_recursive_check_configuration():
+
+    sub1_template = configcheck.ConfigTemplate = {
+        "s11": (configcheckers.isint(),),
+        "s12": (configcheckers.isint(),),
+    }
+
+    sub2_template = configcheck.ConfigTemplate = {
+        "s21": (configcheckers.isint(),),
+        "s22": sub1_template,
+        "s23": (configcheckers.isint(),),
+
+    }
+
+    sub3_template = configcheck.ConfigTemplate = {
+        "s31": (configcheckers.isint(),configcheckers.minmax(vmin=-1, vmax=1)),
+    }
+    
+    template: configcheck.ConfigTemplate = {
+        "a": (configcheckers.isint(), configcheckers.minmax(vmin=-1, vmax=1)),
+        "s2": sub2_template,
+        "s3": sub3_template,
+        "b": (configcheckers.isint(),),
+    }
+
+    config_ok: configcheck.Config = {
+        "a": 1,
+        "s2": {
+            "s21": 4,
+            "s22": {
+                "s11": 2,
+                "s12": -8,
+            },
+            "s23": 0,
+        },
+        "s3": {
+            "s31":0
+        },
+        "b": 100,
+    }
+    configcheck.check_configuration(template, config_ok)
+
+    config_not_ok1: configcheck.Config = {
+        "a": 1,
+        "s2": {
+            "s21": 4,
+            "s22": {
+                "s11": 2.1,  # !
+                "s12": -8,
+            },
+            "s23": 0,
+        },
+        "s3": {
+            "s31":0
+        },
+        "b": 100,
+    }
+
+    config_not_ok2: configcheck.Config = {
+        "a": 1,
+        "s2": {
+            "s21": 4,
+            "s22": 1,  # !
+            },
+            "s23": 0,
+        "s3": {
+            "s31":0
+        },
+        "b": 100,
+    }
+    
+    config_not_ok3: configcheck.Config = {
+        "a": 1,
+        "s2": {
+            "s21": 4,
+            "s22": {
+                "s11": 2,
+                "s12": -8,
+            },
+            "s23": 0,
+        },
+        "s3": {
+            "s31":0
+        },
+        "b": 100.1, # !
+    }
+
+    for config in (config_not_ok1, config_not_ok2, config_not_ok3):
+        with pytest.raises(configcheck.ConfigurationValueError):
+            configcheck.check_configuration(template, config)

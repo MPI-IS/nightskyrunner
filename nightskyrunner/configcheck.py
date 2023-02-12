@@ -163,17 +163,14 @@ def checker(method: CheckerMethod):
     return impl
 
 
-ConfigTemplate = dict[str, Iterable[CheckerMethod]]
+ConfigTemplate = dict[str, Iterable[CheckerMethod] | "ConfigTemplate"]
 """
 A template is a dictionary allowing the developer to specify the 
 criterion a configuration dictionary must apply to be valid.
 """
 
 
-def check_configuration(
-    template: ConfigTemplate,
-    config: Config,
-) -> None:
+def check_configuration(template: ConfigTemplate, config: Config) -> None:
     """
     Check that the configuration is valid under the provided template.
 
@@ -193,6 +190,10 @@ def check_configuration(
             _errors.add(error)
         return _errors
 
+    # if an iterable of methods: applying the checker methods on the value
+    # if a ConfigTemplate: a recursive call to this sub configuration dict
+    checkers: Iterable[CheckerMethod] | "ConfigTemplate"
+
     for name, value in config.items():
         try:
             checkers = template[name]
@@ -202,13 +203,31 @@ def check_configuration(
                 ConfigurationValueError(name, None, "no such configuration field"),
             )
         else:
-            checker: CheckerMethod
-            for checker in checkers:
-                try:
-                    checker(name, value)
-                except ConfigurationValueError as cav:
-                    _errors = add_error(_errors, cav)
 
+            # sub configuration dictionary, recursive call
+            if isinstance(checkers, dict):
+                if isinstance(value, dict):
+                    try:
+                        check_configuration(checkers, value)
+                    except ConfigurationValueError as cve:
+                        _errors = add_error(_errors, cve)
+                else:
+                    _errors = add_error(
+                        _errors,
+                        ConfigurationValueError(
+                            name, value, "expected a configuration dict"
+                        )
+                    )
+
+            # "simple" value, checking it is valid
+            else:
+                checker: CheckerMethod
+                for checker in checkers:
+                    try:
+                        checker(name, value)
+                    except ConfigurationValueError as cav:
+                        _errors = add_error(_errors, cav)
+                        
     for name in template:
         if name not in config:
             error = ConfigurationValueError(name, None, "missing configuration value")
