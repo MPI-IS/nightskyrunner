@@ -1,46 +1,26 @@
 import time
-import multiprocessing
-from nightskyrunner import shared_memory
+from multiprocessing import Manager, Process
 
+def stuff(d):
+    for count in range(10):
+        d["a"] = f"lala {count}"
+        time.sleep(1)
 
-class P:
-    def __init__(self):
-        self._running = multiprocessing.Value("i", False)
-        self._process: typing.Optional[multiprocessing.Process] = None
-        self._sm = shared_memory.root()
+m = Manager()
+d = m.dict()
 
-    def _run(self,sm):
-        self._running.value = True
-        count = 0
-        while self._running.value:
-            count += 1
-            sm.item("a",exists_ok=True).set(count)
-            print(
-                sm.item("a",exists_ok=True).get()
-            )
-            time.sleep(0.1)
-            
-    def start(self) -> None:
-        self._process = multiprocessing.Process(target=self._run, args=(shared_memory.root(),))
-        self._process.start()
+d["a"] = 1
+d["b"] = m.dict()
+d["b"]["c"]=2.1
 
-    def stop(self):
-        if self._process is not None:
-            self._running.value = False
-            self._process.join()
-            self._process = None
-
-
-p = P()
+p = Process(target=stuff,args=(d,))
 p.start()
 
-sm = shared_memory.root()
+start =  time.time()
 
-for _ in range(20):
-    print(
-        "\t",
-        sm.item("a",exists_ok=True).get()
-    )
-    time.sleep(0.1)
+while time.time()-start < 10:
+    print(d["a"])
 
-p.stop()
+
+
+

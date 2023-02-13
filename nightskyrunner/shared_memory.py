@@ -55,10 +55,13 @@ class MemoryItem:
     Can host arbitrary data.
     """
 
-    def __init__(self) -> None:
+    _upload_queues: list[Queue] = []
+    
+    def __init__(self, key_path: list[str]=[]) -> None:
         self._lock = threading.Lock()
         self._data: Optional[Any] = None
-
+        self._key_path = key_path
+        
     @_do_lock
     def get(self) -> Optional[Any]:
         """
@@ -73,8 +76,8 @@ class MemoryItem:
         Set the data
         """
         self._data = copy.deepcopy(data)
-
-
+        
+            
 class access:
     """
     Context manager for accessing in a thread safe manner
@@ -85,6 +88,7 @@ class access:
     """
 
     def __init__(self, memory_item: MemoryItem) -> None:
+        self._memory_item = memory_item
         self._data = memory_item._data
         self._lock = memory_item._lock
 
@@ -215,6 +219,58 @@ class SharedMemory:
 
 _memory = SharedMemory()
 
+class MirroringQueue:
+
+    def __init__(
+            self, upload_queue: Queue, download_queue: Queue
+    ):
+        self._upload_queue = upload_queue
+        self._download_queue = download_queue
+        self._running = False
+        self._thread: Optional[Thread] = None
+
+    def run(self):
+        self._running = True
+        sm = shared_memory.root()
+        while running.value:
+            value, keys_path = self._download_queue.get()
+            item: SharedMemory | MemoryItem = sm
+            l = len(keys_path)
+            for index, key in enumerate(keys_path):
+                if index<l-1:
+                    item = item.sub(key, exists_ok=True)
+                else:
+                    item = item.item(key, exists_ok=True)
+            item.set(value)
+        
+    def start(self):
+        self._thread = Thread(target=self.run)
+        self._tread.start()
+
+    def stop(self):
+        if self._thread is None:
+            return
+        self._running = False
+        self._thread.join()
+        self._thread = None
+        
+mirroring_queues: list[MirroringQueue] = []
+
+
+def mirroring_queues()->tuple[Queue,Queue]:
+    upload_queue = Queue()
+    download_queue = Queue()
+    _upload_queues.append(in_queue)
+    _download_queues.append(out_queue)
+
+    def _sm_sync(
+            sm: SharedMemory,
+            queue: multiprocessing.Queue,
+            running: multiprocessing.Value
+    )->None:
+
+    
+
 
 def root() -> SharedMemory:
     """
@@ -230,3 +286,7 @@ def clear() -> None:
     """
     global _memory
     _memory = SharedMemory()
+
+
+    
+    
