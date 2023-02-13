@@ -165,7 +165,7 @@ def checker(method: CheckerMethod):
 
 ConfigTemplate = dict[str, Iterable[CheckerMethod] | "ConfigTemplate"]
 """
-A template is a dictionary allowing the developer to specify the 
+A template is a dictionary allowing the developer to specify the
 criterion a configuration dictionary must apply to be valid.
 """
 
@@ -216,7 +216,7 @@ def check_configuration(template: ConfigTemplate, config: Config) -> None:
                         _errors,
                         ConfigurationValueError(
                             name, value, "expected a configuration dict"
-                        )
+                        ),
                     )
 
             # "simple" value, checking it is valid
@@ -227,7 +227,7 @@ def check_configuration(template: ConfigTemplate, config: Config) -> None:
                         checker(name, value)
                     except ConfigurationValueError as cav:
                         _errors = add_error(_errors, cav)
-                        
+
     for name in template:
         if name not in config:
             error = ConfigurationValueError(name, None, "missing configuration value")

@@ -176,6 +176,7 @@ class Status(Timed):
         self._state_level = state_level
         self._entries: dict[str, str] = {}
         self._state = State.off
+        self._error: Optional[str] = None
         self._message: Optional[str] = None
         self.start()
 
@@ -225,20 +226,31 @@ class Status(Timed):
         return d
 
     @_set_sm
-    def state(self, state: State) -> None:
+    def state(self, state: State, error: Optional[str]=None) -> None:
         """
         Set the current state. If it changes from the previous state,
         callbacks are called.
+
+        Args:
+          state: the new status
+          error: the error message to be set. Ignored if state is not 
+            State.error.
         """
+        if state != State.error:
+            self._error = None
         if self._state == state:
             return
         if state == state.starting:
             self.start()
         elif state in (state.off, state.error):
             self.reset()
+            if state == state.error:
+                self._error = error
         if state == state.running:
             self.value("running for", self.duration(), level=None)
         status_change = f"{self._state}.name->{state}.name"
+        if state == State.error:
+            status_change = f"{status_change} (self._error)"
         self._state = state
         try:
             level = self._state_level[state]
