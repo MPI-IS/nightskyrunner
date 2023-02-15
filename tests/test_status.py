@@ -4,9 +4,8 @@ Unit tests of the status module
 
 import pytest
 from typing import Generator
-from nightskyrunner import shared_memory as sm
+from nightskyrunner.shared_memory import SharedMemory
 from nightskyrunner.status import Status, State, Level, NoSuchStatusError
-
 
 @pytest.fixture
 def reset_memory(
@@ -17,7 +16,7 @@ def reset_memory(
     clear shared memory on exit
     """
     yield None
-    sm.clear()
+    SharedMemory.clear()
 
 
 def test_basic(reset_memory):
@@ -67,7 +66,7 @@ def test_sm_saving(reset_memory):
     status.state(State.off)
     assert Status.retrieve("test").get()["state"] == State.off
 
-
+    
 def test_callbacks(reset_memory):
     class Count:
         info = 0

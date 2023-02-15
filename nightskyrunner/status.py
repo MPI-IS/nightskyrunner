@@ -1,10 +1,11 @@
 import logging
 import threading
+import copy
 from functools import wraps
 from enum import Enum
 from datetime import datetime
 from typing import Optional, Callable, Any
-from . import shared_memory as sm
+from .shared_memory import SharedMemory, MultiPDict
 
 
 class Timed:
@@ -76,11 +77,9 @@ def _set_sm(method):
     @wraps(method)
     def _impl(self, *args, **kwargs):
         method(self, *args, **kwargs)
-        item = (
-            sm.root().sub(self.sm_key, exists_ok=True).item(self._name, exists_ok=True)
-        )
-        item.set(self)
-
+        sm: MultiPDict = SharedMemory.get(self.sm_key)
+        sm[self._name] = self
+        
     return _impl
 
 
@@ -197,11 +196,12 @@ class Status(Timed):
         Returns a deep copy of the related instance
         of Status (or throws a NotSuchStatusError)
         """
+        sm: MultiPDict = SharedMemory.get(cls.sm_key)
         try:
-            item = sm.root().get_memory(cls.sm_key).get_item(name)
+            instance: "Status" = sm[name]
         except KeyError:
             raise NoSuchStatusError(name)
-        return item.get()
+        return copy.deepcopy(instance)
 
     def _call_callbacks(self, message: str, level: Level) -> None:
         try:
@@ -226,14 +226,14 @@ class Status(Timed):
         return d
 
     @_set_sm
-    def state(self, state: State, error: Optional[str]=None) -> None:
+    def state(self, state: State, error: Optional[str] = None) -> None:
         """
         Set the current state. If it changes from the previous state,
         callbacks are called.
 
         Args:
           state: the new status
-          error: the error message to be set. Ignored if state is not 
+          error: the error message to be set. Ignored if state is not
             State.error.
         """
         if state != State.error:
@@ -247,7 +247,7 @@ class Status(Timed):
             if state == state.error:
                 self._error = error
         if state == state.running:
-            self.value("running for", self.duration(), level=None)
+            self._value("running for", self.duration(), level=None)
         status_change = f"{self._state}.name->{state}.name"
         if state == State.error:
             status_change = f"{status_change} (self._error)"
@@ -258,12 +258,7 @@ class Status(Timed):
             return
         self._call_callbacks(status_change, level)
 
-    @_set_sm
-    def value(self, key: str, value: str, level: Optional[Level] = None) -> None:
-        """
-        Update the value for the specified key. If level is not None,
-        callbacks are called.
-        """
+    def _value(self, key: str, value: str, level: Optional[Level] = None) -> None:
         try:
             previous = self._entries[key]
         except KeyError:
@@ -272,6 +267,14 @@ class Status(Timed):
         self._entries[key] = value
         if previous != value and level:
             self._call_callbacks(f"{key} set to {value}", level)
+        
+    @_set_sm
+    def value(self, key: str, value: str, level: Optional[Level] = None) -> None:
+        """
+        Update the value for the specified key. If level is not None,
+        callbacks are called.
+        """
+        self._value(key, value, level=level)
 
     @_set_sm
     def message(
