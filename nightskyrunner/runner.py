@@ -89,14 +89,13 @@ class ProcessRunner(Runner):
         self._running = Value("i", False)
         self._process: typing.Optional[Process] = None
         self._running = Value("i", False)
-        
+
     @manage_error
     def start(self):
         self.state(State.starting)
         self._running.value = True
         self._process = Process(
-            target=self.run,
-            args=(SharedMemory.get_all(), self._running)
+            target=self.run, args=(SharedMemory.get_all(), self._running)
         )
         self._process.start()
         self.state(State.running)
@@ -109,12 +108,12 @@ class ProcessRunner(Runner):
         self._process = None
         self.state(State.off)
 
-    def _alive(self)->bool:
+    def _alive(self) -> bool:
         if self._process is None:
             return False
         self._process.join(timeout=0)
-        return self._process.is_alive():
-        
+        return self._process.is_alive()
+
     @manage_error
     def revive(self):
         if not self._alive:
@@ -123,11 +122,7 @@ class ProcessRunner(Runner):
             self.start()
 
     @manage_error
-    def run(
-            self,
-            memories: dict[str, MultiPDict],
-            running: Value
-    )->None:
+    def run(self, memories: dict[str, MultiPDict], running: Value) -> None:
         SharedMemory.set_all(memories)
         running.value = True
         while running.value:

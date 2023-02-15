@@ -7,6 +7,7 @@ from typing import Generator
 from nightskyrunner.shared_memory import SharedMemory
 from nightskyrunner.status import Status, State, Level, NoSuchStatusError
 
+
 @pytest.fixture
 def reset_memory(
     request,
@@ -66,7 +67,7 @@ def test_sm_saving(reset_memory):
     status.state(State.off)
     assert Status.retrieve("test").get()["state"] == State.off
 
-    
+
 def test_callbacks(reset_memory):
     class Count:
         info = 0

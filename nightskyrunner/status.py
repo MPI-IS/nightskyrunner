@@ -79,7 +79,7 @@ def _set_sm(method):
         method(self, *args, **kwargs)
         sm: MultiPDict = SharedMemory.get(self.sm_key)
         sm[self._name] = self
-        
+
     return _impl
 
 
@@ -267,7 +267,7 @@ class Status(Timed):
         self._entries[key] = value
         if previous != value and level:
             self._call_callbacks(f"{key} set to {value}", level)
-        
+
     @_set_sm
     def value(self, key: str, value: str, level: Optional[Level] = None) -> None:
         """

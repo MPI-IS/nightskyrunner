@@ -11,18 +11,18 @@ class SharedMemory:
     """
     For sharing data accross threads and processes.
     Maintain a dictionary which keys are arbitrary strings
-    and values multiprocessing dictionaries. 
+    and values multiprocessing dictionaries.
 
     To share these dictionaries with a new process, they need
     to be passed as argument to the target function of the process,
     and the function should set them to its local SharedMemory class:
-    
+
     ```
     def process(memories: dict[str, MultiPDict]):
         SharedMemory.set_all(memories)
         d = SharedMemory.get("d")
         d["value"]=100
-    
+
     d = SharedMemory.get("d")
     d["value"]=0
 
@@ -38,7 +38,7 @@ class SharedMemory:
     Limitation: only the dictionaries already created when the process is spawned
     will be shared (no such limitations for threads)
 
-    Because the dictionary are multiprocess dictionary, the 
+    Because the dictionary are multiprocess dictionary, the
     values they hold must be pickable.
     """
 
@@ -49,7 +49,7 @@ class SharedMemory:
     @classmethod
     def get(cls, memory_key: str) -> MultiPDict:
         """
-        Getting the dictionary associated with the key, 
+        Getting the dictionary associated with the key,
         creating it if necessary.
         """
         with cls._lock:
@@ -63,11 +63,11 @@ class SharedMemory:
                 return m
 
     @classmethod
-    """
-    Set a dictionary associated to the key, overwriting the current
-    dictionary if any
-    """
     def set(cls, memory_key: str, memory: MultiPDict) -> None:
+        """
+        Set a dictionary associated to the key, overwriting the current
+        dictionary if any
+        """
         with cls._lock:
             if cls._manager is None:
                 cls._manager = multiprocessing.Manager()
@@ -84,20 +84,17 @@ class SharedMemory:
                 del cls._memories[memory_key]
             else:
                 cls._memories = {}
-                
+
     @classmethod
-    def get_all(cls)->dict[str, MultiPDict]:
+    def get_all(cls) -> dict[str, MultiPDict]:
         """
         Return all dictionaries
         """
         return cls._memories
 
     @classmethod
-    def set_all(cls, memories: dict[str, MultiPDict])->None:
+    def set_all(cls, memories: dict[str, MultiPDict]) -> None:
         """
         Overwrite all dictionaries.
         """
         cls._memories = memories
-            
-
-                
