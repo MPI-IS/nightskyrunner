@@ -1,3 +1,4 @@
+import time
 from functools import wraps
 from multiprocessing import Process, Value
 from . import status
@@ -15,10 +16,41 @@ def manage_error(method):
 
     return _impl
 
+class _Sleeper:
+    def __init__(
+            self,
+            frequency: float,
+            interrupts: Iterable[Callable[[],bool]],
+            core_frequency: float
+    )->None:
+        self._period = 1. / frequency
+        self._previous: Optional[float] = None
+        self._interrupts = interrupts
+        self._core_frequency = core_frequency
+        
+    def wait(self):
+        if self._previous is None:
+            self._previous = time.time()-self._period
+        while time.time()-self._previous < self._period:
+            for interrupt in self._interrupts:
+                if interrupt():
+                    self._previous = time.time()
+                    return
+            time.sleep(self._core_frequency)
+        self._previous = time.time()
 
-class Runner(status.Status):
-    def __init__(self, name: str, config_getter: ConfigGetter) -> None:
-        super().__init__(name)
+# TODO: use class decorator to decorate all method with "manage_error"        
+class Runner(status.Status, _Sleeper):
+    def __init__(
+            self,
+            name: str,
+            config_getter: ConfigGetter,
+            frequency: float,
+            interrupts: Iterable[Callable[[],bool]]=[],
+            core_frequency: float = 0.005
+    ) -> None:
+        status.Status.__init__(self,name)
+        _Sleeper(self,frequency,interrupts,core_frequency)
         self._config_getter = config_getter
 
     @manage_error
@@ -37,10 +69,13 @@ class Runner(status.Status):
     def revive(self):
         raise NotImplementedError()
 
-    @manage_error
     def iterate(self):
         raise NotImplementedError()
 
+    def frequency_iterate(self):
+        self.iterate()
+        self.wait()
+                
     @manage_error
     def run(self):
         raise NotImplementedError()
@@ -79,7 +114,7 @@ class ThreadRunner(Runner):
     def run(self):
         self._running = True
         while self._running:
-            self.iterate()
+            self.frequency_iterate()
         self.on_exit()
 
 
@@ -126,5 +161,5 @@ class ProcessRunner(Runner):
         SharedMemory.set_all(memories)
         running.value = True
         while running.value:
-            self.iterate()
+            self.frequency_iterate()
         self.on_exit()
