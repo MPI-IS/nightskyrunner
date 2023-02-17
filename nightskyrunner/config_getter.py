@@ -71,6 +71,26 @@ class ConfigGetter:
         return config
 
 
+class FixedDictConfigGetter(ConfigGetter):
+    """
+    Returns the configuration dictionary that was
+    passed at it as arguments, possibly updated by
+    the override configuration.
+    """
+
+    def __init__(
+        self,
+        config: Config,
+        template: Optional[ConfigTemplate] = None,
+        override: Optional[Config] = None,
+    ) -> None:
+        super().__init__(template=template, override=override)
+        self._config = config
+
+    def _get(self):
+        return self._config
+
+
 class StaticTomlFile(ConfigGetter):
     """
     Returns configuration dict based on a toml formated file.

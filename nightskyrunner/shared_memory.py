@@ -1,10 +1,13 @@
 from typing import Optional
-import multiprocessing
-from multiprocessing import managers
+import multiprocessing as mp
+from multiprocessing import managers, sharedctypes
 from threading import Lock
 
-MultiPDict = multiprocessing.managers.DictProxy
+MultiPDict = mp.managers.DictProxy
 """ multiprocessing dict"""
+
+Manager = mp.managers.SyncManager
+MpValue = mp.sharedctypes.SynchronizedBase
 
 
 class SharedMemory:
@@ -42,7 +45,7 @@ class SharedMemory:
     values they hold must be pickable.
     """
 
-    _manager: Optional[multiprocessing.Manager] = None
+    _manager: Optional[Manager] = None
     _memories: dict[str, MultiPDict] = {}
     _lock = Lock()
 
@@ -54,7 +57,7 @@ class SharedMemory:
         """
         with cls._lock:
             if cls._manager is None:
-                cls._manager = multiprocessing.Manager()
+                cls._manager = mp.Manager()
             try:
                 return cls._memories[memory_key]
             except KeyError:
@@ -70,7 +73,7 @@ class SharedMemory:
         """
         with cls._lock:
             if cls._manager is None:
-                cls._manager = multiprocessing.Manager()
+                cls._manager = mp.Manager()
             cls._memories[memory_key] = memory
 
     @classmethod

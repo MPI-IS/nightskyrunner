@@ -247,7 +247,7 @@ class Status(Timed):
             if state == state.error:
                 self._error = error
         if state == state.running:
-            self._value("running for", self.duration(), level=None)
+            self._value("running for", str(self.duration()), level=None)
         status_change = f"{self._state}.name->{state}.name"
         if state == State.error:
             status_change = f"{status_change} (self._error)"

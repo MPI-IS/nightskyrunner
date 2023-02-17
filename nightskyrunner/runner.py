@@ -1,9 +1,12 @@
 import time
+import threading
+from typing import Iterable, Optional, Callable
 from functools import wraps
 from multiprocessing import Process, Value
-from . import status
+from .status import Status, State
 from . import configcheck
 from .config_getter import ConfigGetter
+from .shared_memory import MultiPDict, MpValue, SharedMemory
 
 
 def manage_error(method):
@@ -16,22 +19,23 @@ def manage_error(method):
 
     return _impl
 
+
 class _Sleeper:
     def __init__(
-            self,
-            frequency: float,
-            interrupts: Iterable[Callable[[],bool]],
-            core_frequency: float
-    )->None:
-        self._period = 1. / frequency
+        self,
+        frequency: float,
+        interrupts: Iterable[Callable[[], bool]],
+        core_frequency: float,
+    ) -> None:
+        self._period = 1.0 / frequency
         self._previous: Optional[float] = None
         self._interrupts = interrupts
         self._core_frequency = core_frequency
-        
+
     def wait(self):
         if self._previous is None:
-            self._previous = time.time()-self._period
-        while time.time()-self._previous < self._period:
+            self._previous = time.time() - self._period
+        while time.time() - self._previous < self._period:
             for interrupt in self._interrupts:
                 if interrupt():
                     self._previous = time.time()
@@ -39,18 +43,19 @@ class _Sleeper:
             time.sleep(self._core_frequency)
         self._previous = time.time()
 
-# TODO: use class decorator to decorate all method with "manage_error"        
-class Runner(status.Status, _Sleeper):
+
+# TODO: use class decorator to decorate all method with "manage_error"
+class Runner(Status, _Sleeper):
     def __init__(
-            self,
-            name: str,
-            config_getter: ConfigGetter,
-            frequency: float,
-            interrupts: Iterable[Callable[[],bool]]=[],
-            core_frequency: float = 0.005
+        self,
+        name: str,
+        config_getter: ConfigGetter,
+        frequency: float,
+        interrupts: Iterable[Callable[[], bool]] = [],
+        core_frequency: float = 0.005,
     ) -> None:
-        status.Status.__init__(self,name)
-        _Sleeper(self,frequency,interrupts,core_frequency)
+        Status.__init__(self, name)
+        _Sleeper.__init__(self, frequency, interrupts, core_frequency)
         self._config_getter = config_getter
 
     @manage_error
@@ -75,16 +80,26 @@ class Runner(status.Status, _Sleeper):
     def frequency_iterate(self):
         self.iterate()
         self.wait()
-                
+
     @manage_error
     def run(self):
         raise NotImplementedError()
 
 
 class ThreadRunner(Runner):
-    def __init__(self, name: str, config_getter: ConfigGetter) -> None:
-        super().__init__(name, config_getter)
-        self._thread: typing.Optional[threading.Thread] = None
+    def __init__(
+            self,
+            name: str,
+            config_getter: ConfigGetter,
+            frequency: float,
+            interrupts: Iterable[Callable[[], bool]] = [],
+            core_frequency: float = 0.005,
+    ) -> None:
+        super().__init__(
+            name, config_getter, frequency,
+            interrupts, core_frequency
+        )
+        self._thread: Optional[threading.Thread] = None
         self._running = False
 
     @manage_error
@@ -119,10 +134,20 @@ class ThreadRunner(Runner):
 
 
 class ProcessRunner(Runner):
-    def __init__(self, name: str, config_getter: ConfigGetter) -> None:
-        super().__init__(name, config_getter)
-        self._running = Value("i", False)
-        self._process: typing.Optional[Process] = None
+    def __init__(
+            self,
+            name: str,
+            config_getter: ConfigGetter,
+            frequency: float,
+            interrupts: Iterable[Callable[[], bool]] = [],
+            core_frequency: float = 0.005,
+    ) -> None:
+        super().__init__(
+            name, config_getter, frequency,
+            interrupts, core_frequency
+        )
+        self._running: MpValue = Value("i", False)
+        self._process: Optional[Process] = None
         self._running = Value("i", False)
 
     @manage_error
@@ -157,9 +182,9 @@ class ProcessRunner(Runner):
             self.start()
 
     @manage_error
-    def run(self, memories: dict[str, MultiPDict], running: Value) -> None:
+    def run(self, memories: dict[str, MultiPDict], running: MpValue) -> None:
         SharedMemory.set_all(memories)
-        running.value = True
-        while running.value:
+        running.value = True  # type: ignore
+        while running.value:  # type: ignore
             self.frequency_iterate()
         self.on_exit()
