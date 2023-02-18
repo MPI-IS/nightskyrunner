@@ -180,6 +180,13 @@ class Status(Timed):
         self._message: Optional[str] = None
         self.start()
 
+    @property
+    def name(self)->str:
+        return self._name
+
+    def get_state(self)->State:
+        return self._state
+    
     @classmethod
     def set_callback(cls, level: Level, callback: Callback) -> None:
         """

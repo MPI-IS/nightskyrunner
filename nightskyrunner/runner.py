@@ -13,7 +13,7 @@ def manage_error(method):
     @wraps(method)
     def _impl(self, *args, **kwargs):
         try:
-            method(self, *args, **kwargs)
+            return method(self, *args, **kwargs)
         except Exception as e:
             self._status.state(State.error, f"{type(e)}: {e}")
 
@@ -58,26 +58,34 @@ class Runner(_Sleeper):
         self._status = Status(name)
         self._config_getter = config_getter
 
+    @property
+    def name(self)->str:
+        return self._status.name
+        
     @manage_error
     def start(self):
         raise NotImplementedError()
 
-    def _monitor_stop(self, on_stop: Callable) -> None:
+    def _monitor_stop(self, on_stop: Callable, blocking: bool) -> None:
         def _stop(self):
+            alive = self.alive()
             while self.alive():
                 time.sleep(0.002)
             on_stop()
             self._status.state(State.off)
-
-        self._stop_thread = threading.Thread(target=_stop).start()
+        if blocking:
+            _stop(self)
+        else:
+            self._stop_thread = threading.Thread(target=_stop, args=(self,))
+            self._stop_thread.start()
 
     @manage_error
-    def stop(self):
+    def stop(self, blocking: bool=False)->None:
         raise NotImplementedError()
 
     @manage_error
     def stopped(self) -> bool:
-        raise NotImplementedError()
+        return self._status.get_state() == State.off
 
     @manage_error
     def on_exit(self):
@@ -134,10 +142,10 @@ class ThreadRunner(Runner):
         self._thread = None
 
     @manage_error
-    def stop(self):
+    def stop(self, blocking: bool =False)->None:
         self._status.state(State.stopping)
         self._running = False
-        self._monitor_stop(self._on_stop)
+        self._monitor_stop(self._on_stop, blocking)
 
     @manage_error        
     def alive(self) -> bool:
@@ -188,11 +196,10 @@ class ProcessRunner(Runner):
         self._process = None
 
     @manage_error
-    def stop(self):
+    def stop(self, blocking: bool=False)->None:
         self._status.state(State.stopping)
         self._running.value = False
-        self._monitor_stop(self._on_stop)
-        self._status.state(State.off)
+        self._monitor_stop(self._on_stop, blocking)
 
     @manage_error
     def alive(self) -> bool:
@@ -203,7 +210,7 @@ class ProcessRunner(Runner):
 
     @manage_error
     def revive(self):
-        if not self.alive:
+        if not self.alive():
             if self._process is not None:
                 del self._process
             self.start()
