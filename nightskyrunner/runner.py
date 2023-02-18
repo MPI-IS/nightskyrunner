@@ -6,31 +6,13 @@ method ('custom': developpers create subclasses of Runner implementing this meth
 
 import time
 import threading
+import inspect
 from typing import Iterable, Optional, Callable
-from functools import wraps
 from multiprocessing import Process, Value
 from .status import Status, State, Level
 from . import configcheck
 from .config_getter import ConfigGetter
 from .shared_memory import MultiPDict, MpValue, SharedMemory
-
-
-def manage_error(method):
-    """
-    Decorator for Runner's method.
-    When any of the method raise an Exception, this
-    Exception is caught and the state of the
-    Runner switches to "error".
-    """
-
-    @wraps(method)
-    def _impl(self, *args, **kwargs):
-        try:
-            return method(self, *args, **kwargs)
-        except Exception as e:
-            self._status.state(State.error, f"{type(e)}: {e}")
-
-    return _impl
 
 
 class _Sleeper:
@@ -83,7 +65,35 @@ class _Sleeper:
         self._previous = time.time()
 
 
-# TODO: use class decorator to decorate all method with "manage_error"
+def _status_error(class_: type, name: str, method: Callable):
+    def catching_error(self, *args, **kwargs):
+        try:
+            return method(self, *args, **kwargs)
+        except Exception as e:
+            self._status.state(State.error, f"{type(e)}: {e}")
+            raise e
+
+    setattr(class_, name, catching_error)
+
+
+def status_error(class_: type) -> type:
+    """
+    Class decorator which ensure any exception raised by a public
+    method of the class results in the status of the instance to be
+    switched to 'error'.
+
+    Concrete subclasses of Runner must be decorated by this decorator.
+    Subclasses of Runner that are not decorared raise a TypeError
+    when being constructed.
+    """
+    methods = inspect.getmembers(class_, predicate=inspect.isfunction)
+    for name, method in methods:
+        if not name[0] == "_":
+            _status_error(class_, name, method)
+    setattr(class_, "_status_error", True)
+    return class_
+
+
 class Runner(_Sleeper):
     """
     A Runner manages a thread (ThreadRunner virtual subclass) or a process
@@ -100,6 +110,12 @@ class Runner(_Sleeper):
     status = Status.retrieve(name)
     ```
 
+    Concrete subclasses of Runner must be decorated with "status_error":
+    this ensure that the status of an instance of Runner is switched to
+    "error" if an exception is thrown by any of the public instance's
+    method. Subclasses that are not decorated raise a TypeError when
+    being constructed.
+
     Args:
       name: arbitrary name of the runner. Can be used to retrieve's the
         runners' status
@@ -113,6 +129,9 @@ class Runner(_Sleeper):
         long time to exit after a call to the 'stop' method. An interrupt allows
         for shorter this time
       core_frequency: frequency at which interrupts will be called.
+
+    Raises:
+      TypeError: if the class is not decorated with 'status_error'
     """
 
     def __init__(
@@ -123,6 +142,10 @@ class Runner(_Sleeper):
         interrupts: Iterable[Callable[[], bool]] = [],
         core_frequency: float = 200.0,
     ) -> None:
+        if not hasattr(self.__class__, "_status_error"):
+            raise TypeError(
+                "concrete subclasses of Runner must be decorated " "with 'status_error'"
+            )
         _Sleeper.__init__(self, frequency, interrupts, core_frequency)
         self._status = Status(name)
         self._config_getter = config_getter
@@ -135,7 +158,6 @@ class Runner(_Sleeper):
         """
         return self._status.name
 
-    @manage_error
     def start(self):
         """
         Start the thread or process
@@ -156,7 +178,6 @@ class Runner(_Sleeper):
             self._stop_thread = threading.Thread(target=_stop, args=(self,))
             self._stop_thread.start()
 
-    @manage_error
     def stop(self, blocking: bool = False) -> None:
         """
         Request the thread / process to stop running.
@@ -167,7 +188,6 @@ class Runner(_Sleeper):
         """
         raise NotImplementedError()
 
-    @manage_error
     def stopped(self) -> bool:
         """
         Returns True if the current state if State.off,
@@ -175,7 +195,6 @@ class Runner(_Sleeper):
         """
         return self._status.get_state() == State.off
 
-    @manage_error
     def on_exit(self):
         """
         This method can be called when the 'job' of the
@@ -183,7 +202,6 @@ class Runner(_Sleeper):
         """
         raise NotImplementedError()
 
-    @manage_error
     def alive(self) -> bool:
         """
         Returns True if the thread or process is still
@@ -191,7 +209,6 @@ class Runner(_Sleeper):
         """
         raise NotImplementedError()
 
-    @manage_error
     def revive(self):
         """
         Restart the thread / process, if it died
@@ -210,7 +227,6 @@ class Runner(_Sleeper):
         self.iterate()
         self.wait()
 
-    @manage_error
     def _run(self):
         raise NotImplementedError()
 
@@ -238,7 +254,6 @@ class ThreadRunner(Runner):
     def value(self, key: str, value: str, level: Optional[Level] = None) -> None:
         self._status.value(key, value, level=level)
 
-    @manage_error
     def start(self):
         self._status.state(State.starting)
         self._thread = threading.Thread(target=self._run)
@@ -249,26 +264,22 @@ class ThreadRunner(Runner):
     def _on_stop(self) -> None:
         self._thread = None
 
-    @manage_error
     def stop(self, blocking: bool = False) -> None:
         self._status.state(State.stopping)
         self._running = False
         self._monitor_stop(self._on_stop, blocking)
 
-    @manage_error
     def alive(self) -> bool:
         if self._thread is None or not self._thread.is_alive():
             return False
         return True
 
-    @manage_error
     def revive(self):
         if not self.alive():
             if self._thread is not None:
                 del self._thread
             self.start()
 
-    @manage_error
     def _run(self):
         self._running = True
         while self._running:
@@ -298,7 +309,6 @@ class ProcessRunner(Runner):
         self._process: Optional[Process] = None
         self._running = Value("i", False)
 
-    @manage_error
     def start(self):
         self._status.state(State.starting)
         self._running.value = True
@@ -311,27 +321,23 @@ class ProcessRunner(Runner):
     def _on_stop(self):
         self._process = None
 
-    @manage_error
     def stop(self, blocking: bool = False) -> None:
         self._status.state(State.stopping)
         self._running.value = False
         self._monitor_stop(self._on_stop, blocking)
 
-    @manage_error
     def alive(self) -> bool:
         if self._process is None:
             return False
         self._process.join(timeout=0)
         return self._process.is_alive()
 
-    @manage_error
     def revive(self):
         if not self.alive():
             if self._process is not None:
                 del self._process
             self.start()
 
-    @manage_error
     def run(self, memories: dict[str, MultiPDict], running: MpValue) -> None:
         SharedMemory.set_all(memories)
         running.value = True  # type: ignore

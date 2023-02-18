@@ -6,7 +6,7 @@ import pytest
 import time
 from typing import Iterable, Callable, Generator, Type
 from nightskyrunner.config_getter import FixedDictConfigGetter
-from nightskyrunner.runner import Runner, ThreadRunner, ProcessRunner
+from nightskyrunner.runner import Runner, ThreadRunner, ProcessRunner, status_error
 from nightskyrunner.status import Status, State
 from nightskyrunner.shared_memory import SharedMemory
 
@@ -38,12 +38,12 @@ def _interrupt() -> bool:
     return bool(value)
 
 
-class ThreadTestRunner(TestRunnerMixin, ThreadRunner):
+class NotDecoratedRunner(TestRunnerMixin, ThreadRunner):
     def __init__(
         self,
         frequency: float,
         interrupts: Iterable[Callable[[], bool]] = [],
-        core_frequency: float = 0.005,
+        core_frequency: float = 200.0,
         name: str = "test_thread_runner",
     ) -> None:
         global _config
@@ -53,12 +53,29 @@ class ThreadTestRunner(TestRunnerMixin, ThreadRunner):
         TestRunnerMixin.__init__(self)
 
 
+@status_error
+class ThreadTestRunner(TestRunnerMixin, ThreadRunner):
+    def __init__(
+        self,
+        frequency: float,
+        interrupts: Iterable[Callable[[], bool]] = [],
+        core_frequency: float = 200.0,
+        name: str = "test_thread_runner",
+    ) -> None:
+        global _config
+        ThreadRunner.__init__(
+            self, name, _config, frequency, interrupts, core_frequency
+        )
+        TestRunnerMixin.__init__(self)
+
+
+@status_error
 class ProcessTestRunner(TestRunnerMixin, ProcessRunner):
     def __init__(
         self,
         frequency,
         interrupts: Iterable[Callable[[], bool]] = [],
-        core_frequency: float = 0.005,
+        core_frequency: float = 200.0,
         name: str = "test_process_runner",
     ) -> None:
         global _config
@@ -145,3 +162,13 @@ def test_revive(get_runner_class):
     time.sleep(0.01)
     assert Status.retrieve(instance.name).get()["state"] == State.running
     instance.stop(blocking=True)
+
+
+def test_status_error_enforced():
+    """
+    Check that concrete subclasses of Runner
+    that are not decorated with "status_error"
+    throw a TypeError when being constructed.
+    """
+    with pytest.raises(TypeError):
+        NotDecoratedRunner()
