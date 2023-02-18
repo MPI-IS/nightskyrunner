@@ -1,3 +1,7 @@
+"""
+Unit-tests of the runner module 
+"""
+
 import pytest
 import time
 from typing import Iterable, Callable, Generator, Type
@@ -10,17 +14,18 @@ from nightskyrunner.shared_memory import SharedMemory
 class TestError(Exception):
     pass
 
+
 class TestRunnerMixin:
     def __init__(self):
         SharedMemory.get("test")["value_out"] = 0
         SharedMemory.get("test")["value_in"] = 0
         SharedMemory.get("test")["error"] = False
-        
+
     def iterate(self):
         SharedMemory.get("test")["value_out"] = SharedMemory.get("test")["value_in"]
         if SharedMemory.get("test")["error"]:
             raise TestError()
-        
+
 
 _config = FixedDictConfigGetter({})
 
@@ -35,11 +40,11 @@ def _interrupt() -> bool:
 
 class ThreadTestRunner(TestRunnerMixin, ThreadRunner):
     def __init__(
-            self,
-            frequency: float,
-            interrupts: Iterable[Callable[[], bool]] = [],
-            core_frequency: float = 0.005,
-            name: str = "test_thread_runner"
+        self,
+        frequency: float,
+        interrupts: Iterable[Callable[[], bool]] = [],
+        core_frequency: float = 0.005,
+        name: str = "test_thread_runner",
     ) -> None:
         global _config
         ThreadRunner.__init__(
@@ -50,11 +55,11 @@ class ThreadTestRunner(TestRunnerMixin, ThreadRunner):
 
 class ProcessTestRunner(TestRunnerMixin, ProcessRunner):
     def __init__(
-            self,
-            frequency,
-            interrupts: Iterable[Callable[[], bool]] = [],
-            core_frequency: float = 0.005,
-            name: str = "test_process_runner"
+        self,
+        frequency,
+        interrupts: Iterable[Callable[[], bool]] = [],
+        core_frequency: float = 0.005,
+        name: str = "test_process_runner",
     ) -> None:
         global _config
         ProcessRunner.__init__(
@@ -77,10 +82,15 @@ def get_runner_class(request) -> Generator[Type[Runner], None, None]:
 
 
 def test_basic_runner(manage_shared_memory, get_runner_class):
+    """
+    Testing basic runner's functionalities
+    """
     frequency = 100.0
     instance = get_runner_class(frequency)
     instance.start()
     for value in (2, 5, 9):
+        # the iterate method of the runner set the
+        # value of 'value_out' to the value of 'value_in'
         SharedMemory.get("test")["value_in"] = value
         time.sleep(0.05)
         assert SharedMemory.get("test")["value_out"] == value
@@ -92,6 +102,10 @@ def test_basic_runner(manage_shared_memory, get_runner_class):
 
 
 def test_interrupt(manage_shared_memory, get_runner_class):
+    """
+    Testing the interrupts are properly called
+    """
+    # low frequency setup on purpose
     frequency = 0.1
     instance = get_runner_class(frequency, interrupts=(_interrupt,))
     instance.start()
@@ -100,19 +114,31 @@ def test_interrupt(manage_shared_memory, get_runner_class):
     time.sleep(0.01)
     assert Status.retrieve(instance.name).get()["state"] == State.stopping
     assert not instance.stopped()
+    # this triggers the interrupt to return True
     SharedMemory.get("test")["interrupt"] = True
     time.sleep(0.01)
+    # if the interrupt has not been properly called, the
+    # instance would not have stopped yet, because of the
+    # very low frequency
     assert instance.stopped()
     assert Status.retrieve(instance.name).get()["state"] == State.off
 
+
 def test_revive(get_runner_class):
-    frequency = 100.
+    """
+    Testing that a runner can be revived after
+    experiencing an error
+    """
+    frequency = 100.0
     instance = get_runner_class(frequency)
     instance.start()
     time.sleep(0.01)
     assert Status.retrieve(instance.name).get()["state"] == State.running
+    # triggers the iterate method to thrown an error
     SharedMemory.get("test")["error"] = True
     time.sleep(0.01)
+    # so that the iterate method will not throw an error
+    # after the revive
     SharedMemory.get("test")["error"] = False
     assert Status.retrieve(instance.name).get()["state"] == State.error
     instance.revive()

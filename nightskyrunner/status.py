@@ -181,12 +181,12 @@ class Status(Timed):
         self.start()
 
     @property
-    def name(self)->str:
+    def name(self) -> str:
         return self._name
 
-    def get_state(self)->State:
+    def get_state(self) -> State:
         return self._state
-    
+
     @classmethod
     def set_callback(cls, level: Level, callback: Callback) -> None:
         """
