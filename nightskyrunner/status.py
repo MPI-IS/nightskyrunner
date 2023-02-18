@@ -48,8 +48,9 @@ class State(Enum):
 
     running = (0,)
     starting = (1,)
-    off = (2,)
-    error = (3,)
+    stopping = (2,)
+    off = (3,)
+    error = (4,)
 
 
 class Level(Enum):

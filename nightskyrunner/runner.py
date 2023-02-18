@@ -3,7 +3,7 @@ import threading
 from typing import Iterable, Optional, Callable
 from functools import wraps
 from multiprocessing import Process, Value
-from .status import Status, State
+from .status import Status, State, Level
 from . import configcheck
 from .config_getter import ConfigGetter
 from .shared_memory import MultiPDict, MpValue, SharedMemory
@@ -15,7 +15,7 @@ def manage_error(method):
         try:
             method(self, *args, **kwargs)
         except Exception as e:
-            self.state(State.error, f"{type(e)}: {e}")
+            self._status.state(State.error, f"{type(e)}: {e}")
 
     return _impl
 
@@ -45,7 +45,7 @@ class _Sleeper:
 
 
 # TODO: use class decorator to decorate all method with "manage_error"
-class Runner(Status, _Sleeper):
+class Runner(_Sleeper):
     def __init__(
         self,
         name: str,
@@ -54,20 +54,37 @@ class Runner(Status, _Sleeper):
         interrupts: Iterable[Callable[[], bool]] = [],
         core_frequency: float = 0.005,
     ) -> None:
-        Status.__init__(self, name)
         _Sleeper.__init__(self, frequency, interrupts, core_frequency)
+        self._status = Status(name)
         self._config_getter = config_getter
 
     @manage_error
     def start(self):
         raise NotImplementedError()
 
+    def _monitor_stop(self, on_stop: Callable) -> None:
+        def _stop(self):
+            while self.alive():
+                time.sleep(0.002)
+            on_stop()
+            self._status.state(State.off)
+
+        self._stop_thread = threading.Thread(target=_stop).start()
+
     @manage_error
     def stop(self):
         raise NotImplementedError()
 
     @manage_error
+    def stopped(self) -> bool:
+        raise NotImplementedError()
+
+    @manage_error
     def on_exit(self):
+        raise NotImplementedError()
+
+    @manage_error
+    def alive(self) -> bool:
         raise NotImplementedError()
 
     @manage_error
@@ -88,39 +105,49 @@ class Runner(Status, _Sleeper):
 
 class ThreadRunner(Runner):
     def __init__(
-            self,
-            name: str,
-            config_getter: ConfigGetter,
-            frequency: float,
-            interrupts: Iterable[Callable[[], bool]] = [],
-            core_frequency: float = 0.005,
+        self,
+        name: str,
+        config_getter: ConfigGetter,
+        frequency: float,
+        interrupts: Iterable[Callable[[], bool]] = [],
+        core_frequency: float = 0.005,
     ) -> None:
-        super().__init__(
-            name, config_getter, frequency,
-            interrupts, core_frequency
-        )
+        super().__init__(name, config_getter, frequency, interrupts, core_frequency)
         self._thread: Optional[threading.Thread] = None
         self._running = False
 
+    def message(self, msg: str, level: Optional[Level] = None) -> None:
+        self._status.message(msg, level)
+
+    def value(self, key: str, value: str, level: Optional[Level] = None) -> None:
+        self._status.value(key, value, level=level)
+
     @manage_error
     def start(self):
-        self.state(State.starting)
+        self._status.state(State.starting)
         self._thread = threading.Thread(target=self.run)
         self._running = True
         self._thread.start()
-        self.state(State.running)
+        self._status.state(State.running)
+
+    def _on_stop(self) -> None:
+        self._thread = None
 
     @manage_error
     def stop(self):
+        self._status.state(State.stopping)
         self._running = False
-        if self._thread is not None:
-            self._thread.join()
-        self._thread = None
-        self.state(State.off)
+        self._monitor_stop(self._on_stop)
+
+    @manage_error        
+    def alive(self) -> bool:
+        if self._thread is None or not self._thread.is_alive():
+            return False
+        return True
 
     @manage_error
     def revive(self):
-        if self._thread is None or not self._thread.is_alive():
+        if not self.alive():
             if self._thread is not None:
                 del self._thread
             self.start()
@@ -135,40 +162,40 @@ class ThreadRunner(Runner):
 
 class ProcessRunner(Runner):
     def __init__(
-            self,
-            name: str,
-            config_getter: ConfigGetter,
-            frequency: float,
-            interrupts: Iterable[Callable[[], bool]] = [],
-            core_frequency: float = 0.005,
+        self,
+        name: str,
+        config_getter: ConfigGetter,
+        frequency: float,
+        interrupts: Iterable[Callable[[], bool]] = [],
+        core_frequency: float = 0.005,
     ) -> None:
-        super().__init__(
-            name, config_getter, frequency,
-            interrupts, core_frequency
-        )
+        super().__init__(name, config_getter, frequency, interrupts, core_frequency)
         self._running: MpValue = Value("i", False)
         self._process: Optional[Process] = None
         self._running = Value("i", False)
 
     @manage_error
     def start(self):
-        self.state(State.starting)
+        self._status.state(State.starting)
         self._running.value = True
         self._process = Process(
             target=self.run, args=(SharedMemory.get_all(), self._running)
         )
         self._process.start()
-        self.state(State.running)
+        self._status.state(State.running)
+
+    def _on_stop(self):
+        self._process = None
 
     @manage_error
     def stop(self):
+        self._status.state(State.stopping)
         self._running.value = False
-        if self._process is not None:
-            self._process.join()
-        self._process = None
-        self.state(State.off)
+        self._monitor_stop(self._on_stop)
+        self._status.state(State.off)
 
-    def _alive(self) -> bool:
+    @manage_error
+    def alive(self) -> bool:
         if self._process is None:
             return False
         self._process.join(timeout=0)
@@ -176,7 +203,7 @@ class ProcessRunner(Runner):
 
     @manage_error
     def revive(self):
-        if not self._alive:
+        if not self.alive:
             if self._process is not None:
                 del self._process
             self.start()
