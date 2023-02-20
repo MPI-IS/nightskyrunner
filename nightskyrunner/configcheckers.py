@@ -54,3 +54,5 @@ def is_directory(name: str, value: Any, create: bool = False) -> None:
         raise ConfigurationValueError(name, value, "directory not found")
     if not value.is_dir():
         raise ConfigurationValueError(name, value, "not a directory")
+
+

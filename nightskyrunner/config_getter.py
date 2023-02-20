@@ -143,3 +143,52 @@ class DynamicTomlFile(ConfigGetter):
 
     def _get(self) -> Config:
         return toml.loads(self._path.read_text())
+
+
+class TemplateFieldConfig:
+    def __init__(
+            self,
+            method: str,
+            kwargs = dict[str,str],
+    )->None:
+        self.method = method
+        self.kwargs = kwargs
+    
+
+class TemplateConfig:
+    def __init__(
+            self,
+            modules: Iterable[ModulePath],
+            fields: Iterable[TemplateFieldConfig]
+    ):
+        self.modules = modules
+        self.fields = fields
+    
+class ConfigGetterConfig:
+    """
+          "classpath": "",  # nightskyrunner.config_getter.DynamicTomlFile
+          "args": [],       # [path="/path/to/toml/file"]
+          "kwargs": {},     # {}
+          "template": {
+                "modules": []  #  
+                "field": [[method,[kwargs],]],  # "field": [["is_directory",["create","True"],]
+    """
+    
+    def __init__(
+            self,
+            path: ClassPath,
+            args: list[str],
+            kwargs: dict[str,str],
+            template: Optional[TemplateConfig]
+    ):
+        self._path = path
+        self._args = args
+        self._kwargs = kwargs
+        self._template = template
+
+    def instantiate(self)->ConfigGetter:
+        pass
+
+
+def toml_config_getter_config(path: Path)->ConfigGetter:
+    pass
