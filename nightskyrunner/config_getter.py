@@ -7,7 +7,9 @@ import toml
 from typing import Optional
 from pathlib import Path
 from .config import Config
-from .configcheck import ConfigurationValueError, ConfigTemplate, check_configuration
+from .configuration_value_error import ConfigurationValueError
+from .configcheck import ConfigTemplate, check_configuration
+from .import_dotted import get_from_dotted
 
 
 def _override(c1: Config, c2: Config) -> None:
@@ -146,13 +148,36 @@ class DynamicTomlFile(ConfigGetter):
 
 
 class TemplateFieldConfig:
+    """
+    
+    """
     def __init__(
             self,
+            modules: Iterable[ClassPath],
             method: str,
-            kwargs = dict[str,str],
+            kwargs = KwargsList,
     )->None:
-        self.method = method
-        self.kwargs = kwargs
+        self.method: Union[type,Callable]
+        try:
+            if modules:
+                self.method = get_from_dotted(method,prefixes=modules)
+            else:
+                self.method = get_from_dotted(method,prefixes=None)
+        except ImportError as e:
+            raise ConfigurationValueError(
+                method, modules, str(e)
+            )
+        self.kwargs: dict[str,Any] = {}
+        for arg,value in kwargs.items():
+            try:
+                v = eval(value)
+            except SyntaxError:
+                raise ConfigurationValueError(
+                    str(arg), value,
+                    f"configuration for checker {arg}: failed to evaluate '{kwargs}'"
+                )
+            kwargs[arg] = v
+            
     
 
 class TemplateConfig:
