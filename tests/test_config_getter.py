@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Generator
 from nightskyrunner.config_getter import StaticTomlFile, DynamicTomlFile
 from nightskyrunner.config import Config
-from nightskyrunner.configcheck import ConfigTemplate, ConfigurationValueError
+from nightskyrunner.configcheck import ConfigTemplate, ConfigValueError
 from nightskyrunner.configcheckers import isint
 
 
@@ -73,7 +73,7 @@ def test_static_toml(get_tmp, get_config):
     with open(path, "w+") as f:
         toml.dump(wrong_config, f)
     conf_getter = StaticTomlFile(path, config_template)
-    with pytest.raises(ConfigurationValueError):
+    with pytest.raises(ConfigValueError):
         conf_getter.get()
 
 

@@ -11,10 +11,10 @@ from nightskyrunner import configcheck, configcheckers
 
 def test_configuration_value_error():
     """
-    Test the class ConfigurationValueError
+    Test the class ConfigValueError
     """
-    error1 = configcheck.ConfigurationValueError("error1", 1, "error message 1")
-    error2 = configcheck.ConfigurationValueError("error2", 2, "error message 2")
+    error1 = configcheck.ConfigValueError("error1", 1, "error message 1")
+    error2 = configcheck.ConfigValueError("error2", 2, "error message 2")
 
     error1.add(error2)
 
@@ -33,14 +33,14 @@ def test_checker_methods():
     """
 
     for value in ("str", str, [1, 2], 1.3):
-        with pytest.raises(configcheck.ConfigurationValueError):
+        with pytest.raises(configcheck.ConfigValueError):
             configcheckers.isint()("", value)
 
-    with pytest.raises(configcheck.ConfigurationValueError):
+    with pytest.raises(configcheck.ConfigValueError):
         configcheckers.minmax(vmin=0)("", -1)
         configcheckers.minmax(vmax=0)("", +1)
 
-    with pytest.raises(configcheck.ConfigurationValueError):
+    with pytest.raises(configcheck.ConfigValueError):
         p = Path("/not/existing/path")
         configcheckers.is_directory(create=False)("", p)
 
@@ -79,28 +79,28 @@ def test_check_configuration():
 
         config1: configcheck.Config = copy.deepcopy(config_ok)
         config1["a"] = 10
-        with pytest.raises(configcheck.ConfigurationValueError):
+        with pytest.raises(configcheck.ConfigValueError):
             configcheck.check_configuration(template, config1)
 
         config2: configcheck.Config = copy.deepcopy(config_ok)
         config2["a"] = 1.2
-        with pytest.raises(configcheck.ConfigurationValueError):
+        with pytest.raises(configcheck.ConfigValueError):
             configcheck.check_configuration(template, config2)
 
         config3: configcheck.Config = copy.deepcopy(config_ok)
         config3["b"] = 1.2
         config3["c"] = Path("/no/such/path")
-        with pytest.raises(configcheck.ConfigurationValueError):
+        with pytest.raises(configcheck.ConfigValueError):
             configcheck.check_configuration(template, config3)
 
         config4: configcheck.Config = copy.deepcopy(config_ok)
         config4["other"] = 1
-        with pytest.raises(configcheck.ConfigurationValueError):
+        with pytest.raises(configcheck.ConfigValueError):
             configcheck.check_configuration(template, config4)
 
         config5: configcheck.Config = copy.deepcopy(config_ok)
         del config5["b"]
-        with pytest.raises(configcheck.ConfigurationValueError):
+        with pytest.raises(configcheck.ConfigValueError):
             configcheck.check_configuration(template, config5)
 
 
@@ -183,5 +183,5 @@ def test_recursive_check_configuration():
     }
 
     for config in (config_not_ok1, config_not_ok2, config_not_ok3):
-        with pytest.raises(configcheck.ConfigurationValueError):
+        with pytest.raises(configcheck.ConfigValueError):
             configcheck.check_configuration(template, config)

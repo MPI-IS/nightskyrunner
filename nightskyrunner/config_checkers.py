@@ -1,14 +1,14 @@
 import sys
 from typing import Any, Iterable
 from pathlib import Path
-from .configcheck import checker, ConfigurationValueError
+from .configcheck import checker, ConfigValueError
 
 
 def _wrong_type(name: str, value: Any, types: Iterable[type]) -> None:
     if any([type(value) == t for t in types]):
         return None
     type_str = ", ".join([str(t) for t in types])
-    raise ConfigurationValueError(
+    raise ConfigValueError(
         name, value, f"wrong type (got {type(value)}, expect {type_str})"
     )
 
@@ -27,11 +27,11 @@ def minmax(name: str, value: Any, vmin=-sys.maxsize, vmax=sys.maxsize) -> None:
     Raises a ConfigurationError if value is not in the internval vmin, vmax.
     """
     if value < vmin:
-        raise ConfigurationValueError(
+        raise ConfigValueError(
             name, value, f"value should be in [{vmin}, {vmax}]"
         )
     if value > vmax:
-        raise ConfigurationValueError(
+        raise ConfigValueError(
             name, value, f"value should be in [{vmin}, {vmax}]"
         )
 
@@ -51,8 +51,8 @@ def is_directory(name: str, value: Any, create: bool = False) -> None:
         if create:
             value.mkdir(parents=True)
             return
-        raise ConfigurationValueError(name, value, "directory not found")
+        raise ConfigValueError(name, value, "directory not found")
     if not value.is_dir():
-        raise ConfigurationValueError(name, value, "not a directory")
+        raise ConfigValueError(name, value, "not a directory")
 
 

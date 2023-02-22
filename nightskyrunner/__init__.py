@@ -1,1 +1,1 @@
-from .configuration_value_error import ConfigurationValueError
+from .configuration_value_error import ConfigValueError

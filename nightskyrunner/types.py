@@ -1,9 +1,5 @@
 from typing import Iterable, NewType, Any
 
-DottedPath = NewType('DottedPath',str)
-"""
-The dotted path to a class or a method, e.g. "package.subpackage.module.class_name"
-"""
 
 Config = dict[str, Any | "Config"]
 """

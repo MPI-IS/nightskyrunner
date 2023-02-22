@@ -1,10 +1,80 @@
 """
-Module which defines the class 'ConfigurationValueError'
+Module which defines the class 'ConfigValueError'
 """
 
-from typing import Optional, Generator
+from typing import Optional, Generator, Protocol
 
-class ConfigurationValueError(Exception):
+class _AccError(Protocol, Exception):
+    def __iter__(self):
+        ...
+
+    def add(self, other: type['_AccError'])->None:
+        ...
+
+    def len(self)->int:
+        ...
+
+class _AccErrorContext:
+    def __init__(self, cls: type[_AccError]):
+        self._error = cls()
+        self._cls = cls
+
+    def add(self, *args, **kwargs) -> None:
+        """
+        Append another error
+        """
+        self._error.add(self._cls(*args,**kwargs))
+        
+    def __enter__(self):
+        return self
+
+    def __exit__(self):
+        if len(self._error)>0:
+            raise self._error
+    
+
+def accumulate_error(cls: type[_AccError], method: Callable[[Any],Any]):
+    def r(*args, **kwargs):
+        with _AccErrorContext(cls) as error:
+            error_args = [error]
+            error_args.expend(args)
+            method(*error_args, kwargs)
+    return r
+        
+
+class ConfigError(_AccError):
+
+    def __init__(
+            self, message:Optional[str]=None
+    )->None:
+        self._messages: list[str]
+        if message:
+            self._messages = [message]
+        else:
+            self._messages = []
+
+    def __iter__(self)->Generator[str,None,None]:
+        for message in self._messages:
+            yield message
+        return None
+            
+    def add(self, other: 'ConfigError')->None:
+        for message in other:
+            self._messages.append(message)
+
+    def len(self)->int:
+        return len(self._messages)
+
+    def __str__(self):
+        return ", ".join(self._messages)
+    
+
+class config_error(_AccErrorContext):
+    def __init__(self):
+        super().__init__(self,ConfigError)
+
+    
+class ConfigValueError(Exception):
     """
     To be raised when the user provided an incorrect input(s) for
     configuration field(s).
@@ -43,7 +113,7 @@ class ConfigurationValueError(Exception):
     def __len__(self) -> int:
         return len(self._errors)
 
-    def add(self, other: "ConfigurationValueError") -> None:
+    def add(self, other: "ConfigValueError") -> None:
         """
         Append another error
         """
@@ -71,3 +141,8 @@ class ConfigurationValueError(Exception):
         return ", ".join(
             [f"{name} ({value}): {message}" for name, value, message in self]
         )
+
+class config_value_error(_AccErrorContext):
+    def __init__(self):
+        super().__init__(self,ConfigValueError)
+

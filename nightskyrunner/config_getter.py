@@ -7,7 +7,7 @@ import toml
 from typing import Optional
 from pathlib import Path
 from .config import Config
-from .configuration_value_error import ConfigurationValueError
+from .configuration_value_error import ConfigValueError
 from .configcheck import ConfigTemplate, check_configuration
 from .import_dotted import get_from_dotted
 
@@ -17,12 +17,12 @@ def _override(c1: Config, c2: Config) -> None:
         try:
             value1 = c1[key]
         except KeyError:
-            raise ConfigurationValueError(
+            raise ConfigValueError(
                 key, None, "can not override (no such configuration field)"
             )
         if type(value2) == dict:
             if not type(value1) == dict:
-                raise ConfigurationValueError(
+                raise ConfigValueError(
                     key, None, "can not override (expected a dict)"
                 )
             _override(value1, value2)
@@ -61,7 +61,7 @@ class ConfigGetter:
         the configuration accordingly before returning it.
 
         Raises:
-          A ConfigurationValueError if the configuration is not valid
+          A ConfigValueError if the configuration is not valid
             according to the template; or if there is a mismatch between
             the override dict and the configuration.
         """
@@ -147,73 +147,3 @@ class DynamicTomlFile(ConfigGetter):
         return toml.loads(self._path.read_text())
 
 
-class TemplateFieldConfig:
-    """
-    
-    """
-    def __init__(
-            self,
-            modules: Iterable[ClassPath],
-            method: str,
-            kwargs = KwargsList,
-    )->None:
-        self.method: Union[type,Callable]
-        try:
-            if modules:
-                self.method = get_from_dotted(method,prefixes=modules)
-            else:
-                self.method = get_from_dotted(method,prefixes=None)
-        except ImportError as e:
-            raise ConfigurationValueError(
-                method, modules, str(e)
-            )
-        self.kwargs: dict[str,Any] = {}
-        for arg,value in kwargs.items():
-            try:
-                v = eval(value)
-            except SyntaxError:
-                raise ConfigurationValueError(
-                    str(arg), value,
-                    f"configuration for checker {arg}: failed to evaluate '{kwargs}'"
-                )
-            kwargs[arg] = v
-            
-    
-
-class TemplateConfig:
-    def __init__(
-            self,
-            modules: Iterable[ModulePath],
-            fields: Iterable[TemplateFieldConfig]
-    ):
-        self.modules = modules
-        self.fields = fields
-    
-class ConfigGetterConfig:
-    """
-          "classpath": "",  # nightskyrunner.config_getter.DynamicTomlFile
-          "args": [],       # [path="/path/to/toml/file"]
-          "kwargs": {},     # {}
-          "template": {
-                "modules": []  #  
-                "field": [[method,[kwargs],]],  # "field": [["is_directory",["create","True"],]
-    """
-    
-    def __init__(
-            self,
-            path: ClassPath,
-            args: list[str],
-            kwargs: dict[str,str],
-            template: Optional[TemplateConfig]
-    ):
-        self._path = path
-        self._args = args
-        self._kwargs = kwargs
-        self._template = template
-
-    def instantiate(self)->ConfigGetter:
-        pass
-
-
-def toml_config_getter_config(path: Path)->ConfigGetter:
-    pass

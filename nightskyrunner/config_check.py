@@ -9,11 +9,11 @@ enforce to be valid, e.g.
     @checker
     def is_above(name: str, value: Any, threshold=1.0)->None:
         if value<threshold:
-            raise ConfigurationValueError(name, value, f"under the threshold {threshold}")
+            raise ConfigValueError(name, value, f"under the threshold {threshold}")
 
     @checker is_float(name: str, value: float)->None:
         if not isinstance(float, value):
-            raise ConfigurationValueError(name, value, f"value must be a float")
+            raise ConfigValueError(name, value, f"value must be a float")
 
     template = {
         "field1": (is_float(), is_above(threshold=2.)),
@@ -26,7 +26,7 @@ enforce to be valid, e.g.
     }
     check_configuration(template, config_ok)
 
-    # raises a ConfigurationValueError:
+    # raises a ConfigValueError:
     config_not_ok = {
         "field1": -1.0,  # below threshold of 2 !
         "field2": 1.3
@@ -40,7 +40,7 @@ See the configcheckers module for reusable checker methods.
 
 from typing import Any, Optional, Generator, Iterable, Callable
 from .config import Config
-from .configuration_value_error import ConfigurationValueError
+from .configuration_value_error import ConfigValueError
 
 
 
@@ -108,15 +108,15 @@ def check_configuration(template: ConfigTemplate, config: Config) -> None:
     Check that the configuration is valid under the provided template.
 
     Raises:
-      A ConfigurationValueError is any of the configuration field is invalid,
+      A ConfigValueError is any of the configuration field is invalid,
       missing or superfluous.
     """
 
-    _errors: Optional[ConfigurationValueError] = None
+    _errors: Optional[ConfigValueError] = None
 
     def add_error(
-        _errors: Optional[ConfigurationValueError], error: ConfigurationValueError
-    ) -> ConfigurationValueError:
+        _errors: Optional[ConfigValueError], error: ConfigValueError
+    ) -> ConfigValueError:
         if _errors is None:
             _errors = error
         else:
@@ -133,7 +133,7 @@ def check_configuration(template: ConfigTemplate, config: Config) -> None:
         except KeyError:
             _errors = add_error(
                 _errors,
-                ConfigurationValueError(name, None, "no such configuration field"),
+                ConfigValueError(name, None, "no such configuration field"),
             )
         else:
 
@@ -142,12 +142,12 @@ def check_configuration(template: ConfigTemplate, config: Config) -> None:
                 if isinstance(value, dict):
                     try:
                         check_configuration(checkers, value)
-                    except ConfigurationValueError as cve:
+                    except ConfigValueError as cve:
                         _errors = add_error(_errors, cve)
                 else:
                     _errors = add_error(
                         _errors,
-                        ConfigurationValueError(
+                        ConfigValueError(
                             name, value, "expected a configuration dict"
                         ),
                     )
@@ -158,12 +158,12 @@ def check_configuration(template: ConfigTemplate, config: Config) -> None:
                 for checker in checkers:
                     try:
                         checker(name, value)
-                    except ConfigurationValueError as cav:
+                    except ConfigValueError as cav:
                         _errors = add_error(_errors, cav)
 
     for name in template:
         if name not in config:
-            error = ConfigurationValueError(name, None, "missing configuration value")
+            error = ConfigValueError(name, None, "missing configuration value")
             _errors = add_error(_errors, error)
 
     if _errors is not None:
