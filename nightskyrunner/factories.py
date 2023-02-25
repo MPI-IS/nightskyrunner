@@ -259,26 +259,27 @@ def build_config_getter(
         try:
             self.config_getter = class_(*args,**kwargs)
         except Exception as e:
-            raise ConfigValueError(
-                class_.__name__,f"{args}, {kwargs}","failed to instantiate: {e}"
+            ConfigErrors.add(
+                class_.__name__,
+                f"{args}, {kwargs}",
+                "failed to instantiate: {e}"
             )
             
-@accumulate_error(ConfigError)
-def dict_config_getter(error: ConfigError, label: str, config: dict[str,Any])->ConfigGetter:
+def dict_config_getter(label: str, config: dict[str,Any])->ConfigGetter:
 
     required_keys = ('class',)
 
     for rk in required_keys:
         if not rk in config:
-            error.add(
-                    f"{label}: configuration is missing the key 'class'"
+            ConfigErrors.add(
+                message=f"{label}: configuration is missing the key 'class'"
             )
 
     accepted_keys = ('args','kwargs','template')
     for k in config:
         if k not in accepted_keys:
-            error.add(
-                    f"{label}: unexpected key '{k}'"
+            ConfigErrors.add(
+                message=f"{label}: unexpected key '{k}'"
             )
 
     try:
@@ -286,21 +287,21 @@ def dict_config_getter(error: ConfigError, label: str, config: dict[str,Any])->C
     except KeyError:
         args = []
     if type(args)!=list:
-        error.add(f"label/args: expected list, go {type(args)}")
+        ConfigErrors.add(message=f"label/args: expected list, go {type(args)}")
         
     try:
         kwargs = k['kwargs']
     except KeyError:
         kwargs = {}
     if type(args)!=list:
-        error.add(f"label/kwargs: expected dict, go {type(args)}")
+        ConfigErrors.add(message=f"label/kwargs: expected dict, go {type(args)}")
         
     if 'template' in config:
         tconfig = config['template']
         try:
             checker_moduels = tconfig['modules']
         except KeyError:
-            error.add(
+            ConfigErrors.add(
                 f"{label}/template: missing key 'template'"
             )
         checker_fields = {
@@ -309,8 +310,8 @@ def dict_config_getter(error: ConfigError, label: str, config: dict[str,Any])->C
         }
         for key,value in checker_fields.items():
             if not isinstance(value,dict):
-                error.add(
-                    f"{label}/template/{key}: expect a dictionary, got {type(value)}"
+                ConfigErrors.add(
+                    message=f"{label}/template/{key}: expect a dictionary, got {type(value)}"
                 )
 
     return build_config_getter(
@@ -318,7 +319,6 @@ def dict_config_getter(error: ConfigError, label: str, config: dict[str,Any])->C
         args, kwargs,
         checkers_modules, checkers_fields
     )
-    
         
 def toml_config_getter(filepath: Path)->ConfigGetter:
     """
@@ -351,6 +351,7 @@ def toml_config_getter(filepath: Path)->ConfigGetter:
             f"failed to parse the toml file {filepath}: {e}"
     )
 
-    return dict_config_getter(str(filepath),content)
-    
+    with ConfigErrors(str(filepath)):
+        config_getter =  dict_config_getter(str(filepath),content)
+        return config_getter
 )
