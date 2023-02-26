@@ -22,9 +22,7 @@ def _override(c1: Config, c2: Config) -> None:
             )
         if type(value2) == dict:
             if not type(value1) == dict:
-                raise ConfigValueError(
-                    key, None, "can not override (expected a dict)"
-                )
+                raise ConfigValueError(key, None, "can not override (expected a dict)")
             _override(value1, value2)
         else:
             c1[key] = value2
@@ -145,5 +143,3 @@ class DynamicTomlFile(ConfigGetter):
 
     def _get(self) -> Config:
         return toml.loads(self._path.read_text())
-
-

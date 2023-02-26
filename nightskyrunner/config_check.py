@@ -43,7 +43,6 @@ from .config import Config
 from .configuration_value_error import ConfigValueError
 
 
-
 CheckerMethod = Callable[[str, Any], None]
 """
 Interface for a checker method.
@@ -147,9 +146,7 @@ def check_configuration(template: ConfigTemplate, config: Config) -> None:
                 else:
                     _errors = add_error(
                         _errors,
-                        ConfigValueError(
-                            name, value, "expected a configuration dict"
-                        ),
+                        ConfigValueError(name, value, "expected a configuration dict"),
                     )
 
             # "simple" value, checking it is valid

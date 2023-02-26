@@ -1,18 +1,23 @@
 import importlib
+import inspect
+import toml
+from pathlib import Path
 from functools import partial
-from typing import Optional, Iterable, Callable
-from .types import DottedPath
+from typing import Optional, Iterable, Callable, Any, NewType, cast
+from .config_check import ConfigTemplate, CheckerMethod
+from .config_error import ConfigErrors, ConfigError
+from .config_getter import ConfigGetter
 
-
-DottedPath = NewType('DottedPath',str)
+DottedPath = NewType("DottedPath", str)
 """
-The dotted path to a class or a method, e.g. "package.subpackage.module.class_name"
+The dotted path to a class or a function, e.g. "package.subpackage.module.class_name"
 """
 
+ClassPath = NewType("ClassPath", str)
+ModulePath = NewType("ModulePath", str)
 
-def _get_from_dotted(
-        dotted_path: DottedPath
-) -> Union[type,Callable]:
+
+def _get_from_dotted(dotted_path: DottedPath) -> type | Callable:
 
     # if dotted_path is only the name of the class, it is expected
     # to be in global scope
@@ -33,7 +38,7 @@ def _get_from_dotted(
             f"failed to import {to_import} (needed to instantiate {dotted_path}): {e}"
         )
 
-    # getting the class or method
+    # getting the class or function
     try:
         class_ = getattr(imported, class_name)
     except AttributeError:
@@ -42,13 +47,13 @@ def _get_from_dotted(
         )
 
     return class_
-    
+
 
 def get_from_dotted(
-        dotted_path: DottedPath, prefixes: Optional[Iterable[str]]=None
-) -> Union[type,Callable]:
+    dotted_path: DottedPath | str, prefixes: Optional[Iterable[str]] = None
+) -> type | Callable:
     """
-    Imports package.subpackage.module and returns the class or method.
+    Imports package.subpackage.module and returns the class or function.
 
     If a list of prefixes is provided, will attempt to import
     all dotted path to which the prefix is added, and returns
@@ -56,19 +61,20 @@ def get_from_dotted(
     (raises an ImportError if the import fails for all prefixes).
 
     returns:
-      the class or the method
+      the class or the function
 
     raises:
       an ImportError if the class or any of its package / module
       could not be imported, for any reason
     """
 
-    if prefix is None:
+    if prefixes is None:
         return get_from_dotted(dotted_path)
 
     for prefix in prefixes:
         try:
-            return get_from_dotted(f"{prefix}.{dotted_path}")
+            dpath: DottedPath = cast(DottedPath, f"{prefix}.{dotted_path}")
+            return get_from_dotted(dpath)
         except ImportError:
             pass
 
@@ -78,79 +84,69 @@ def get_from_dotted(
     )
 
 
-
-
-def _check_kwargs(method: Callable, kwargs: dict[str,Any])->None:
+def _check_kwargs(function: Callable, kwargs: dict[str, Any]) -> None:
     """
     Raises a ConfigValueError if the keyword arguments do not
-    match the method's signature.
+    match the function's signature.
     """
-    with config_value_error() as error:
-        args = inspect.getargspec(method)
-        names = args[0]
-        values = args[1:]
-        supported = {name:value for name, value in zip(names,values)}
-        nb_positional_args = len([n for n,v in supported.items() if v is None])
-        if nb_positional_args != 2:
-            error.add(
-                ConfigValueError(
-                    method.__name__, str(kwargs),
-                    str(
-                        "configuration method checker must take 2 positional arguments ",
-                        "(configuration field name and value)"
-                    )
-                )
-            )
-            keyword_args = [name for name,value in supported.items() if value is not None]
-                for ka in keyword_args:
+    args = inspect.getargspec(function)
+    names = args[0]
+    values = args[1:]
+    supported = {name: value for name, value in zip(names, values)}
+    nb_positional_args = len([n for n, v in supported.items() if v is None])
+    if nb_positional_args != 2:
+        ConfigErrors.add(
+            function.__name__,
+            str(kwargs),
+            str(
+                "configuration function checker must take 2 positional arguments "
+                "(configuration field name and value)"
+            ),
+        )
+        keyword_args = [name for name, value in supported.items() if value is not None]
+        for ka in keyword_args:
             if ka not in kwargs:
-                error.add(
-                    ConfigValueError(
-                        method.__name__, ka, str("not a supported keyword argument")
-                    )
+                ConfigErrors.add(
+                    function.__name__, ka, str("not a supported keyword argument")
                 )
-            
-    
 
-def _configured_check_method(
-            modules: Iterable[ClassPath],
-            method: str,
-            kwargs = dict[str,Any],
-)->Callable[[],bool]:
+
+def _configured_check_function(
+    modules: Iterable[ClassPath | ModulePath],
+    function_name: str,
+    kwargs=dict[str, Any],
+) -> CheckerMethod:
     """
     For example:
     ```
     modules = ["nightskyrunner.configchecks", "another.module"]
-    method = "minmax"
+    function = "minmax"
     kwargs = {"vmin":-1, "vmax": +1}
     ```
-    This method imports nightskyrunner.configchecks.minmax 
+    This function imports nightskyrunner.configchecks.minmax
     (or another.module.minmax if the previous import fails)
     and checks the kwargs (vmin and vmax) match the signature
-    of the method; and returns the partial method 
+    of the function; and returns the partial function
     ```
     minmax(vmin=-1,vmax=1)
     ```
     Raises a ConfigValueError if anything goes wrong.
     """
-    method: Union[type,Callable]
+    function: type | Callable
     try:
         if modules:
-            method = get_from_dotted(method,prefixes=modules)
+            function = get_from_dotted(function_name, prefixes=modules)
         else:
-            method = get_from_dotted(method,prefixes=None)
+            function = get_from_dotted(function_name, prefixes=None)
     except ImportError as e:
-        raise ConfigValueError(
-            method, modules, str(e)
-        )
-    _check_kwargs(method, kwargs)
-    return partial(method,**kwargs)
-    
+        raise ConfigError(function_name, modules, str(e))
+    _check_kwargs(function, kwargs)
+    return partial(function, **kwargs)
+
 
 def _field_template_config(
-        modules: Iterable[ModulePath],
-        fields: dict[str,dict[str,Any]]
-)->list[Callable[[],bool]]
+    modules: Iterable[ModulePath], fields: dict[str, dict[str, Any]]
+) -> list[CheckerMethod]:
     """
     For example:
     ```
@@ -167,16 +163,14 @@ def _field_template_config(
     ```
     """
     return [
-        _configured_check_method(
-            modules, field, kwargs
-        ) for field,kwargs in fields.items()
+        _configured_check_function(modules, field, kwargs)
+        for field, kwargs in fields.items()
     ]
 
 
 def _get_config_template(
-            modules: Iterable[ModulePath],
-            fields: dict[str,dict[str,dict[str,Any]]]
-)-> ConfigTemplate:
+    modules: Iterable[ModulePath], fields: dict[str, dict[str, dict[str, Any]]]
+) -> ConfigTemplate:
     """
     For example:
     ```
@@ -198,26 +192,32 @@ def _get_config_template(
     }
     ```
     """
-    return {
-        field_name: _field_template_config(modules,checkers)
-        for field_name, checkers in fields.items()
-    }
-    
+    r: ConfigTemplate = {}
+    for field_name, checkers in fields.items():
+        try:
+            r[field_name] = _field_template_config(modules, checkers)
+        except Exception as e:
+            if type(e) == ConfigError:
+                ConfigErrors.append(e)
+            else:
+                ConfigErrors.add(name=field_name, message=str(e))
+    return r
+
 
 def build_config_getter(
-            class_path: DottedPath,
-            args: Iterable[Any],
-            kwargs: dict[str,Any],
-            checkers_modules: Iterable[ModulePath],
-            checkers_fields: dict[str,dict[str,dict[str,Any]]]
-)
+    class_path: DottedPath,
+    args: Iterable[Any],
+    kwargs: dict[str, Any],
+    checkers_modules: Iterable[ModulePath],
+    checkers_fields: dict[str, dict[str, dict[str, Any]]],
+):
     """
     For example:
     ```
     "nightskyrunner.config_getter.DynamicTomlFile",  # dotted path to class
     ["/path/to/toml/file"],  # args to pass to class constructor
     {},  # kwargs to pass to class constructor
-    # dotted path to modules with definition of config checkers methods
+    # dotted path to modules with definition of config checkers functions
     modules = ["nightskyrunner.configchecks", "another.module"]
     # configuration of configuration checkers
     {
@@ -231,103 +231,87 @@ def build_config_getter(
     DynamicTomlFile("/path/to/toml/file",**{},template={'field1':[min_max(vmin=-1,vmax=1)]})
     ```
     """
-    def __init__(
-            self,
-            class_path: DottedPath,
-            args: Iterable[Any],
-            kwargs: dict[str,Any],
-            checkers_modules: Iterable[ModulePath],
-            checkers_fields: dict[str,dict[str,dict[str,Any]]]
-    )->None:
-        try:
-            class_ = get_from_dotted(class_path)
-        except ImportError as e:
-            raise ConfigValueError(
-                "ConfigGetter", class_path, f"failed to import: {e}"
-            )
-        if not issubclass(class_,ConfigGetter):
-            raise ConfigValueError(
-                "ConfigGetter",class_.__name__,"must be a subclass of ConfigGetter"
-            )
-        if 'template' in kwargs:
-            raise ConfigValueError(
-                class_.__name__,'template',"'template' is a reserved keyword argument"
-            )
-        kwargs['template'] =  _get_config_template(
-            checkers_modules, checkers_fields
-        )
-        try:
-            self.config_getter = class_(*args,**kwargs)
-        except Exception as e:
-            raise ConfigValueError(
-                class_.__name__,f"{args}, {kwargs}","failed to instantiate: {e}"
-            )
-            
-@accumulate_error(ConfigError)
-def dict_config_getter(error: ConfigError, label: str, config: dict[str,Any])->ConfigGetter:
 
-    required_keys = ('class',)
+    try:
+        class_ = get_from_dotted(class_path)
+    except ImportError as e:
+        raise ConfigError(name=class_path, message=f"failed to import: {e}")
+
+    if not issubclass(cast(type, class_), ConfigGetter):
+        raise ConfigError(
+            name=class_.__name__, message="must be a subclass of ConfigGetter"
+        )
+    if "template" in kwargs:
+        raise ConfigError(
+            name=class_.__name__, message="'template' is a reserved keyword argument"
+        )
+    kwargs["template"] = _get_config_template(checkers_modules, checkers_fields)
+    if not ConfigErrors.has_error():
+        try:
+            config_getter = class_(*args, **kwargs)
+        except Exception as e:
+            ConfigErrors.add(
+                class_.__name__, f"{args}, {kwargs}", "failed to instantiate: {e}"
+            )
+
+
+def dict_config_getter(label: str, config: dict[str, Any]) -> ConfigGetter:
+
+    required_keys = ("class",)
 
     for rk in required_keys:
         if not rk in config:
-            error.add(
-                    f"{label}: configuration is missing the key 'class'"
+            ConfigErrors.add(
+                message=f"{label}: configuration is missing the key 'class'"
             )
 
-    accepted_keys = ('args','kwargs','template')
+    accepted_keys = ("args", "kwargs", "template")
     for k in config:
         if k not in accepted_keys:
-            error.add(
-                    f"{label}: unexpected key '{k}'"
-            )
+            ConfigErrors.add(message=f"{label}: unexpected key '{k}'")
 
     try:
-        args = k['args']
+        args = config["args"]
     except KeyError:
         args = []
-    if type(args)!=list:
-        error.add(f"label/args: expected list, go {type(args)}")
-        
+    if type(args) != list:
+        ConfigErrors.add(message=f"label/args: expected list, go {type(args)}")
+
     try:
-        kwargs = k['kwargs']
+        kwargs = config["kwargs"]
     except KeyError:
         kwargs = {}
-    if type(args)!=list:
-        error.add(f"label/kwargs: expected dict, go {type(args)}")
-        
-    if 'template' in config:
-        tconfig = config['template']
+    if type(args) != list:
+        ConfigErrors.add(message=f"label/kwargs: expected dict, go {type(args)}")
+
+    if "template" in config:
+        tconfig = config["template"]
         try:
-            checker_moduels = tconfig['modules']
+            checker_modules = tconfig["modules"]
         except KeyError:
-            error.add(
-                f"{label}/template: missing key 'template'"
-            )
+            ConfigErrors.add(f"{label}/template: missing key 'template'")
         checker_fields = {
-            key:value for key,value in tconfig.items()
-            if key != 'modules'
+            key: value for key, value in tconfig.items() if key != "modules"
         }
-        for key,value in checker_fields.items():
-            if not isinstance(value,dict):
-                error.add(
-                    f"{label}/template/{key}: expect a dictionary, got {type(value)}"
+        for key, value in checker_fields.items():
+            if not isinstance(value, dict):
+                ConfigErrors.add(
+                    message=f"{label}/template/{key}: expect a dictionary, got {type(value)}"
                 )
 
     return build_config_getter(
-        config['class'],
-        args, kwargs,
-        checkers_modules, checkers_fields
+        config["class"], args, kwargs, checker_modules, checker_fields
     )
-    
-        
-def toml_config_getter(filepath: Path)->ConfigGetter:
+
+
+def toml_config_getter(filepath: Path) -> ConfigGetter:
     """
     For example:
     ```
-    class = "nightskyrunner.config_getter.DynamicTomlFile",  
-    args = ["/path/to/toml/file"] 
+    class = "nightskyrunner.config_getter.DynamicTomlFile",
+    args = ["/path/to/toml/file"]
     kwargs = {}
-    
+
     [template]
     modules = ["nightskyrunner.configchecks", "another.module"]
     field1: {
@@ -339,18 +323,14 @@ def toml_config_getter(filepath: Path)->ConfigGetter:
     DynamicTomlFile("/path/to/toml/file",**{},template={'field1':[min_max(vmin=-1,vmax=1)]})
     ```
     """
-    if not content.is_file():
-        raise ConfigError(
-            f"failed to find the file {filepath}"
-        )
-    
-    try:
-        content = toml.load(content)
-    except Exception as e:
-        raise ConfigError(
-            f"failed to parse the toml file {filepath}: {e}"
-    )
+    if not filepath.is_file():
+        raise ConfigError(f"failed to find the file {filepath}")
 
-    return dict_config_getter(str(filepath),content)
-    
-)
+    try:
+        content = toml.load(filepath)
+    except Exception as e:
+        raise ConfigError(f"failed to parse the toml file {filepath}: {e}")
+
+    with ConfigErrors(str(filepath)):
+        config_getter = dict_config_getter(str(filepath), content)
+        return config_getter
