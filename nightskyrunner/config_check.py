@@ -40,7 +40,7 @@ See the configcheckers module for reusable checker methods.
 
 from typing import Any, Optional, Generator, Iterable, Callable
 from .config import Config
-from .configuration_value_error import ConfigValueError
+from .config_error import ConfigError
 
 
 CheckerMethod = Callable[[str, Any], None]
@@ -58,8 +58,22 @@ Raises:
 """
 
 
+
 class _Checker:
     def __init__(self, method: CheckerMethod, kwargs) -> None:
+        nb_args = len(
+            [
+                key for key,value
+                in inspect.signature(method).parameters.items()
+                if value.default==inspect._empty
+            ]
+        )
+        if nb_args!=2:
+            raise ValueError(
+                f"the function {method.__name__} does not support the "
+                "checker decorator: a configuration checker function must "
+                "take two arguments (name and value)"
+            )
         self._method = method
         self._kwargs = kwargs
 
@@ -89,10 +103,10 @@ def checker(method: CheckerMethod):
     above_threshold(threshold=1.)("field1",1.2)
     """
 
-    def impl(**kwargs) -> CheckerMethod:
+    def _checker_method(**kwargs) -> CheckerMethod:
         return _Checker(method, kwargs)  # callable because __call__
 
-    return impl
+    return _checker_method
 
 
 ConfigTemplate = dict[str, Iterable[CheckerMethod] | "ConfigTemplate"]

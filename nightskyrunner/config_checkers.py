@@ -1,7 +1,8 @@
 import sys
 from typing import Any, Iterable
 from pathlib import Path
-from .configcheck import checker, ConfigValueError
+from .config_check import checker
+from .config_error import ConfigError
 
 
 def _wrong_type(name: str, value: Any, types: Iterable[type]) -> None:

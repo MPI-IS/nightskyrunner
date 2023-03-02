@@ -69,7 +69,7 @@ def get_from_dotted(
     """
 
     if prefixes is None:
-        return get_from_dotted(dotted_path)
+        return _get_from_dotted(dotted_path)
 
     for prefix in prefixes:
         try:
@@ -86,30 +86,26 @@ def get_from_dotted(
 
 def _check_kwargs(function: Callable, kwargs: dict[str, Any]) -> None:
     """
-    Raises a ConfigValueError if the keyword arguments do not
+    Update the current ConfigError
+    if the keyword arguments do not
     match the function's signature.
     """
-    args = inspect.getargspec(function)
-    names = args[0]
-    values = args[1:]
-    supported = {name: value for name, value in zip(names, values)}
-    nb_positional_args = len([n for n, v in supported.items() if v is None])
-    if nb_positional_args != 2:
-        ConfigErrors.add(
-            function.__name__,
-            str(kwargs),
-            str(
-                "configuration function checker must take 2 positional arguments "
-                "(configuration field name and value)"
-            ),
-        )
-        keyword_args = [name for name, value in supported.items() if value is not None]
-        for ka in keyword_args:
-            if ka not in kwargs:
+    for arg,value in inspect.signature(function).parameters.items():
+        args_defaults = {
+            key:value.default
+            for key,value in inspect.signature(function).parameters.items()
+        }
+        function_kwargs = {
+            key:value for key,value in args_defaults.items()
+            if value!=inspect._empty
+        }
+        for kwarg in kwargs:
+            if not kwarg in function_kwargs:
                 ConfigErrors.add(
-                    function.__name__, ka, str("not a supported keyword argument")
+                    f"{function.__name__}: {kwarg} is not a supported argument "
+                    f"(supported: {','.join([k for k in function_kwargs])})"
                 )
-
+                
 
 def _configured_check_function(
     modules: Iterable[ClassPath | ModulePath],
@@ -139,7 +135,13 @@ def _configured_check_function(
         else:
             function = get_from_dotted(function_name, prefixes=None)
     except ImportError as e:
-        raise ConfigError(function_name, modules, str(e))
+        raise ConfigError(
+            f"failed to import {function_name} from {modules}: {str(e)}"
+        )
+    if not function.__name__=="_checker_method":
+        raise ConfigError(
+            f"the method {function_name} does not seem to be decorated with 'checker'"
+        )
     _check_kwargs(function, kwargs)
     return partial(function, **kwargs)
 
@@ -248,8 +250,8 @@ def build_config_getter(
     kwargs["template"] = _get_config_template(checkers_modules, checkers_fields)
     if not ConfigErrors.has_error():
         try:
-            config_getter = class_(*args, **kwargs)
-        except Exception as e:
+            class_(*args, **kwargs)
+        except Exception as e:  # # noqa: F841
             ConfigErrors.add(
                 class_.__name__, f"{args}, {kwargs}", "failed to instantiate: {e}"
             )
@@ -260,7 +262,7 @@ def dict_config_getter(label: str, config: dict[str, Any]) -> ConfigGetter:
     required_keys = ("class",)
 
     for rk in required_keys:
-        if not rk in config:
+        if rk not in config:
             ConfigErrors.add(
                 message=f"{label}: configuration is missing the key 'class'"
             )

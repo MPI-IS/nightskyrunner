@@ -31,11 +31,18 @@ class ConfigError(Exception):
             yield error
         return None
 
-    @classmethod
-    def has_error(self):
+    def has_error(self)->bool:
         return len(self._errors) > 0
 
+    def __str__(self)->str:
+        return ", ".join(
+            [
+                " | ".join([str(e) for e in error]) for error in self 
+            ]
+        )
+            
 
+    
 class ConfigErrors:
     _errors: dict[str, ConfigError] = {}
     _current = ConfigError()
@@ -62,7 +69,7 @@ class ConfigErrors:
 
     @classmethod
     def has_error(cls):
-        return cls._current.hasError()
+        return cls._current.has_error()
 
     @classmethod
     def get(cls)->ConfigError:

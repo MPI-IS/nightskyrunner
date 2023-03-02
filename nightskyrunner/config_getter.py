@@ -7,9 +7,8 @@ import toml
 from typing import Optional
 from pathlib import Path
 from .config import Config
-from .configuration_value_error import ConfigValueError
-from .configcheck import ConfigTemplate, check_configuration
-from .import_dotted import get_from_dotted
+from .config_error import ConfigError
+from .config_check import ConfigTemplate, check_configuration
 
 
 def _override(c1: Config, c2: Config) -> None:
