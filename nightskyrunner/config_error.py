@@ -15,7 +15,8 @@ class ConfigError(Exception):
         message: Optional[str] = None,
     ) -> None:
         self._errors: list[Error] = []
-        self.add(name, value, message)
+        if any((name,value,message)):
+            self.add(name, value, message)
 
     def add(
         self,
@@ -76,6 +77,10 @@ class ConfigErrors:
     def get(cls) -> ConfigError:
         return cls._current
 
+    @classmethod
+    def errors(cls)->dict[str,ConfigError]:
+        return cls._errors
+    
     def __enter__(self) -> None:
         pass
 

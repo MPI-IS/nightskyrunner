@@ -6,15 +6,16 @@ import pytest
 import tempfile
 import copy
 from pathlib import Path
-from nightskyrunner import configcheck, configcheckers
+from nightskyrunner import confi_check, config_checkers
+from nightskyrunner.config_error import ConfigError, ConfigErrors
 
 
 def test_configuration_value_error():
     """
     Test the class ConfigValueError
     """
-    error1 = configcheck.ConfigValueError("error1", 1, "error message 1")
-    error2 = configcheck.ConfigValueError("error2", 2, "error message 2")
+    error1 = config_check.ConfigValueError("error1", 1, "error message 1")
+    error2 = config_check.ConfigValueError("error2", 2, "error message 2")
 
     error1.add(error2)
 
@@ -33,25 +34,25 @@ def test_checker_methods():
     """
 
     for value in ("str", str, [1, 2], 1.3):
-        with pytest.raises(configcheck.ConfigValueError):
-            configcheckers.isint()("", value)
+        with pytest.raises(config_check.ConfigValueError):
+            config_checkers.isint()("", value)
 
-    with pytest.raises(configcheck.ConfigValueError):
-        configcheckers.minmax(vmin=0)("", -1)
-        configcheckers.minmax(vmax=0)("", +1)
+    with pytest.raises(config_check.ConfigValueError):
+        config_checkers.minmax(vmin=0)("", -1)
+        config_checkers.minmax(vmax=0)("", +1)
 
-    with pytest.raises(configcheck.ConfigValueError):
+    with pytest.raises(config_check.ConfigValueError):
         p = Path("/not/existing/path")
-        configcheckers.is_directory(create=False)("", p)
+        config_checkers.is_directory(create=False)("", p)
 
-    configcheckers.isint()("", 1)
-    configcheckers.minmax(vmin=0, vmax=2)("", 1)
+    config_checkers.isint()("", 1)
+    config_checkers.minmax(vmin=0, vmax=2)("", 1)
 
     with tempfile.TemporaryDirectory() as tmp_dir_:
         tmp_dir = Path(tmp_dir_)
-        configcheckers.is_directory(create=False)("", tmp_dir)
+        config_checkers.is_directory(create=False)("", tmp_dir)
         extended_tmp_dir = tmp_dir / "created"
-        configcheckers.is_directory(create=True)("", extended_tmp_dir)
+        config_checkers.is_directory(create=True)("", extended_tmp_dir)
 
 
 def test_check_configuration():
@@ -60,75 +61,75 @@ def test_check_configuration():
 
         tmp_dir = Path(tmp_dir_)
 
-        template: configcheck.ConfigTemplate = {
-            "a": (configcheckers.isint(), configcheckers.minmax(vmin=-1, vmax=1)),
-            "b": (configcheckers.isint(),),
-            "c": (configcheckers.is_directory(create=False),),
-            "d": (configcheckers.is_directory(create=True),),
+        template: config_check.ConfigTemplate = {
+            "a": (config_checkers.isint(), config_checkers.minmax(vmin=-1, vmax=1)),
+            "b": (config_checkers.isint(),),
+            "c": (config_checkers.is_directory(create=False),),
+            "d": (config_checkers.is_directory(create=True),),
             "e": [],
         }
 
-        config_ok: configcheck.Config = {
+        config_ok: config_check.Config = {
             "a": 1,
             "b": 20,
             "c": tmp_dir,
             "d": tmp_dir / "sub",
             "e": 1.1,
         }
-        configcheck.check_configuration(template, config_ok)
+        config_check.check_configuration(template, config_ok)
 
-        config1: configcheck.Config = copy.deepcopy(config_ok)
+        config1: config_check.Config = copy.deepcopy(config_ok)
         config1["a"] = 10
-        with pytest.raises(configcheck.ConfigValueError):
-            configcheck.check_configuration(template, config1)
+        with pytest.raises(config_check.ConfigValueError):
+            config_check.check_configuration(template, config1)
 
-        config2: configcheck.Config = copy.deepcopy(config_ok)
+        config2: config_check.Config = copy.deepcopy(config_ok)
         config2["a"] = 1.2
-        with pytest.raises(configcheck.ConfigValueError):
-            configcheck.check_configuration(template, config2)
+        with pytest.raises(config_check.ConfigValueError):
+            config_check.check_configuration(template, config2)
 
-        config3: configcheck.Config = copy.deepcopy(config_ok)
+        config3: config_check.Config = copy.deepcopy(config_ok)
         config3["b"] = 1.2
         config3["c"] = Path("/no/such/path")
-        with pytest.raises(configcheck.ConfigValueError):
-            configcheck.check_configuration(template, config3)
+        with pytest.raises(config_check.ConfigValueError):
+            config_check.check_configuration(template, config3)
 
-        config4: configcheck.Config = copy.deepcopy(config_ok)
+        config4: config_check.Config = copy.deepcopy(config_ok)
         config4["other"] = 1
-        with pytest.raises(configcheck.ConfigValueError):
-            configcheck.check_configuration(template, config4)
+        with pytest.raises(config_check.ConfigValueError):
+            config_check.check_configuration(template, config4)
 
-        config5: configcheck.Config = copy.deepcopy(config_ok)
+        config5: config_check.Config = copy.deepcopy(config_ok)
         del config5["b"]
-        with pytest.raises(configcheck.ConfigValueError):
-            configcheck.check_configuration(template, config5)
+        with pytest.raises(config_check.ConfigValueError):
+            config_check.check_configuration(template, config5)
 
 
 def test_recursive_check_configuration():
 
-    sub1_template = configcheck.ConfigTemplate = {
-        "s11": (configcheckers.isint(),),
-        "s12": (configcheckers.isint(),),
+    sub1_template = config_check.ConfigTemplate = {
+        "s11": (config_checkers.isint(),),
+        "s12": (config_checkers.isint(),),
     }
 
-    sub2_template = configcheck.ConfigTemplate = {
-        "s21": (configcheckers.isint(),),
+    sub2_template = config_check.ConfigTemplate = {
+        "s21": (config_checkers.isint(),),
         "s22": sub1_template,
-        "s23": (configcheckers.isint(),),
+        "s23": (config_checkers.isint(),),
     }
 
-    sub3_template = configcheck.ConfigTemplate = {
-        "s31": (configcheckers.isint(), configcheckers.minmax(vmin=-1, vmax=1)),
+    sub3_template = config_check.ConfigTemplate = {
+        "s31": (config_checkers.isint(), config_checkers.minmax(vmin=-1, vmax=1)),
     }
 
-    template: configcheck.ConfigTemplate = {
-        "a": (configcheckers.isint(), configcheckers.minmax(vmin=-1, vmax=1)),
+    template: config_check.ConfigTemplate = {
+        "a": (config_checkers.isint(), config_checkers.minmax(vmin=-1, vmax=1)),
         "s2": sub2_template,
         "s3": sub3_template,
-        "b": (configcheckers.isint(),),
+        "b": (config_checkers.isint(),),
     }
 
-    config_ok: configcheck.Config = {
+    config_ok: config_check.Config = {
         "a": 1,
         "s2": {
             "s21": 4,
@@ -141,9 +142,9 @@ def test_recursive_check_configuration():
         "s3": {"s31": 0},
         "b": 100,
     }
-    configcheck.check_configuration(template, config_ok)
+    config_check.check_configuration(template, config_ok)
 
-    config_not_ok1: configcheck.Config = {
+    config_not_ok1: config_check.Config = {
         "a": 1,
         "s2": {
             "s21": 4,
@@ -157,7 +158,7 @@ def test_recursive_check_configuration():
         "b": 100,
     }
 
-    config_not_ok2: configcheck.Config = {
+    config_not_ok2: config_check.Config = {
         "a": 1,
         "s2": {
             "s21": 4,
@@ -168,7 +169,7 @@ def test_recursive_check_configuration():
         "b": 100,
     }
 
-    config_not_ok3: configcheck.Config = {
+    config_not_ok3: config_check.Config = {
         "a": 1,
         "s2": {
             "s21": 4,
@@ -183,5 +184,5 @@ def test_recursive_check_configuration():
     }
 
     for config in (config_not_ok1, config_not_ok2, config_not_ok3):
-        with pytest.raises(configcheck.ConfigValueError):
-            configcheck.check_configuration(template, config)
+        with pytest.raises(config_check.ConfigValueError):
+            config_check.check_configuration(template, config)
