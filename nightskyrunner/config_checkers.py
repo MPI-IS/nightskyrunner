@@ -9,9 +9,7 @@ def _wrong_type(name: str, value: Any, types: Iterable[type]) -> None:
     if any([type(value) == t for t in types]):
         return None
     type_str = ", ".join([str(t) for t in types])
-    raise ConfigValueError(
-        name, value, f"wrong type (got {type(value)}, expect {type_str})"
-    )
+    raise ConfigError(name, value, f"wrong type (got {type(value)}, expect {type_str})")
 
 
 @checker

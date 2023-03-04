@@ -31,28 +31,29 @@ class ConfigError(Exception):
             yield error
         return None
 
-    def has_error(self)->bool:
+    def has_error(self) -> bool:
         return len(self._errors) > 0
 
-    def __str__(self)->str:
-        return ", ".join(
-            [
-                " | ".join([str(e) for e in error]) for error in self 
-            ]
-        )
-            
+    def __str__(self) -> str:
+        return ", ".join([" | ".join([str(e) for e in error]) for error in self])
 
-    
+
 class ConfigErrors:
     _errors: dict[str, ConfigError] = {}
     _current = ConfigError()
     _key: Optional[str] = None
 
-    def __init__(self, key:str):
+    def __init__(self, key: str):
         cls = self.__class__
         cls._current = ConfigError()
         cls._key = key
-    
+
+    @classmethod
+    def clear(cls):
+        cls._errors = {}
+        cls._current = ConfigError()
+        cls._key = None
+
     @classmethod
     def add(
         cls,
@@ -72,12 +73,12 @@ class ConfigErrors:
         return cls._current.has_error()
 
     @classmethod
-    def get(cls)->ConfigError:
+    def get(cls) -> ConfigError:
         return cls._current
-        
+
     def __enter__(self) -> None:
         pass
-        
+
     def __exit__(self, exc_type, exc_val, _) -> None:
         cls = self.__class__
         if exc_type is not None:

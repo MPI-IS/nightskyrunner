@@ -37,10 +37,10 @@ enforce to be valid, e.g.
 See the configcheckers module for reusable checker methods.
 """
 
-
+import inspect
 from typing import Any, Optional, Generator, Iterable, Callable
 from .config import Config
-from .config_error import ConfigError
+from .config_error import ConfigError, ConfigErrors
 
 
 CheckerMethod = Callable[[str, Any], None]
@@ -58,32 +58,25 @@ Raises:
 """
 
 
-
-class _Checker:
-    def __init__(self, method: CheckerMethod, kwargs) -> None:
-        nb_args = len(
-            [
-                key for key,value
-                in inspect.signature(method).parameters.items()
-                if value.default==inspect._empty
-            ]
-        )
-        if nb_args!=2:
-            raise ValueError(
-                f"the function {method.__name__} does not support the "
-                "checker decorator: a configuration checker function must "
-                "take two arguments (name and value)"
-            )
+class ApplyCheckerMethod:
+    def __init__(self, method: CheckerMethod):
         self._method = method
-        self._kwargs = kwargs
 
-    def __call__(self, name: str, value: Any) -> None:
-        # note: this function follows the "CheckerMethod"
-        # type
-        return self._method(name, value, **self._kwargs)
+    def supported_kwargs(self) -> Iterable[str]:
+        return [
+            key
+            for key, value in inspect.signature(self._method).parameters.items()
+            if value.default != inspect._empty
+        ]
+
+    def name(self) -> str:
+        return self._method.__name__
+
+    def __call__(self, name: str, value: Any, **kwargs) -> bool:
+        return self._method(name, value, **kwargs)
 
 
-def checker(method: CheckerMethod):
+def checker(method: CheckerMethod) -> ApplyCheckerMethod:
     """
     Decorator for configuration checker functions.
     Returns a partial function that do not take the name and
@@ -103,10 +96,7 @@ def checker(method: CheckerMethod):
     above_threshold(threshold=1.)("field1",1.2)
     """
 
-    def _checker_method(**kwargs) -> CheckerMethod:
-        return _Checker(method, kwargs)  # callable because __call__
-
-    return _checker_method
+    return ApplyCheckerMethod(method)
 
 
 ConfigTemplate = dict[str, Iterable[CheckerMethod] | "ConfigTemplate"]
@@ -119,22 +109,9 @@ criterion a configuration dictionary must apply to be valid.
 def check_configuration(template: ConfigTemplate, config: Config) -> None:
     """
     Check that the configuration is valid under the provided template.
-
-    Raises:
-      A ConfigValueError is any of the configuration field is invalid,
+    Add errors to ConfigErrors if any of the configuration field is invalid,
       missing or superfluous.
     """
-
-    _errors: Optional[ConfigValueError] = None
-
-    def add_error(
-        _errors: Optional[ConfigValueError], error: ConfigValueError
-    ) -> ConfigValueError:
-        if _errors is None:
-            _errors = error
-        else:
-            _errors.add(error)
-        return _errors
 
     # if an iterable of methods: applying the checker methods on the value
     # if a ConfigTemplate: a recursive call to this sub configuration dict
@@ -144,38 +121,27 @@ def check_configuration(template: ConfigTemplate, config: Config) -> None:
         try:
             checkers = template[name]
         except KeyError:
-            _errors = add_error(
-                _errors,
-                ConfigValueError(name, None, "no such configuration field"),
-            )
+            ConfigErrors.add(name=name, message="no such configuration field")
         else:
-
             # sub configuration dictionary, recursive call
             if isinstance(checkers, dict):
                 if isinstance(value, dict):
                     try:
                         check_configuration(checkers, value)
-                    except ConfigValueError as cve:
-                        _errors = add_error(_errors, cve)
+                    except ConfigError as cve:
+                        ConfigErrors.append(cve)
                 else:
-                    _errors = add_error(
-                        _errors,
-                        ConfigValueError(name, value, "expected a configuration dict"),
+                    ConfigErrors.add(
+                        name=name, value=value, message="expected a configuration dict"
                     )
-
             # "simple" value, checking it is valid
             else:
                 checker: CheckerMethod
                 for checker in checkers:
                     try:
                         checker(name, value)
-                    except ConfigValueError as cav:
-                        _errors = add_error(_errors, cav)
-
+                    except ConfigError as cav:
+                        ConfigErrors.append(cav)
     for name in template:
         if name not in config:
-            error = ConfigValueError(name, None, "missing configuration value")
-            _errors = add_error(_errors, error)
-
-    if _errors is not None:
-        raise _errors
+            ConfigErrors.add(name=name, message="missing configuration value")

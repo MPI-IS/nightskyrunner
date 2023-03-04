@@ -70,7 +70,7 @@ class ConfigGetter:
         return config
 
 
-class FixedDictConfigGetter(ConfigGetter):
+class FixedDict(ConfigGetter):
     """
     Returns the configuration dictionary that was
     passed at it as arguments, possibly updated by

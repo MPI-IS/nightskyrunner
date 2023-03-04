@@ -4,7 +4,7 @@ import toml
 from pathlib import Path
 from functools import partial
 from typing import Optional, Iterable, Callable, Any, NewType, cast
-from .config_check import ConfigTemplate, CheckerMethod
+from .config_check import ConfigTemplate, CheckerMethod, ApplyCheckerMethod
 from .config_error import ConfigErrors, ConfigError
 from .config_getter import ConfigGetter
 
@@ -84,29 +84,6 @@ def get_from_dotted(
     )
 
 
-def _check_kwargs(function: Callable, kwargs: dict[str, Any]) -> None:
-    """
-    Update the current ConfigError
-    if the keyword arguments do not
-    match the function's signature.
-    """
-    for arg,value in inspect.signature(function).parameters.items():
-        args_defaults = {
-            key:value.default
-            for key,value in inspect.signature(function).parameters.items()
-        }
-        function_kwargs = {
-            key:value for key,value in args_defaults.items()
-            if value!=inspect._empty
-        }
-        for kwarg in kwargs:
-            if not kwarg in function_kwargs:
-                ConfigErrors.add(
-                    f"{function.__name__}: {kwarg} is not a supported argument "
-                    f"(supported: {','.join([k for k in function_kwargs])})"
-                )
-                
-
 def _configured_check_function(
     modules: Iterable[ClassPath | ModulePath],
     function_name: str,
@@ -135,14 +112,18 @@ def _configured_check_function(
         else:
             function = get_from_dotted(function_name, prefixes=None)
     except ImportError as e:
+        raise ConfigError(f"failed to import {function_name} from {modules}: {str(e)}")
+    if not isinstance(function, ApplyCheckerMethod):
         raise ConfigError(
-            f"failed to import {function_name} from {modules}: {str(e)}"
+            f"the method {function.name()} does not seem to be decorated with 'checker'"
         )
-    if not function.__name__=="_checker_method":
-        raise ConfigError(
-            f"the method {function_name} does not seem to be decorated with 'checker'"
-        )
-    _check_kwargs(function, kwargs)
+    skwargs = function.supported_kwargs()
+    for kwarg in kwargs.keys():
+        if kwarg not in skwargs:
+            ConfigErrors.add(
+                f"{function.name()}: {kwarg} is not a supported argument "
+                f"(supported: {','.join([k for k in skwargs])})"
+            )
     return partial(function, **kwargs)
 
 
@@ -250,11 +231,14 @@ def build_config_getter(
     kwargs["template"] = _get_config_template(checkers_modules, checkers_fields)
     if not ConfigErrors.has_error():
         try:
-            class_(*args, **kwargs)
+            return class_(*args, **kwargs)
         except Exception as e:  # # noqa: F841
             ConfigErrors.add(
-                class_.__name__, f"{args}, {kwargs}", "failed to instantiate: {e}"
+                name=class_.__name__,
+                value=f"{args}, {kwargs}",
+                message="failed to instantiate: {e}",
             )
+    raise ConfigErrors.get()
 
 
 def dict_config_getter(label: str, config: dict[str, Any]) -> ConfigGetter:
@@ -267,7 +251,7 @@ def dict_config_getter(label: str, config: dict[str, Any]) -> ConfigGetter:
                 message=f"{label}: configuration is missing the key 'class'"
             )
 
-    accepted_keys = ("args", "kwargs", "template")
+    accepted_keys = ("class", "args", "kwargs", "template")
     for k in config:
         if k not in accepted_keys:
             ConfigErrors.add(message=f"{label}: unexpected key '{k}'")
