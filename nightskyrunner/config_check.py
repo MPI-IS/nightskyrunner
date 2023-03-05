@@ -57,46 +57,49 @@ Raises:
     is not suitable
 """
 
-
-class ApplyCheckerMethod:
-    def __init__(self, method: CheckerMethod):
-        self._method = method
-
-    def supported_kwargs(self) -> Iterable[str]:
-        return [
-            key
-            for key, value in inspect.signature(self._method).parameters.items()
-            if value.default != inspect._empty
-        ]
-
-    def name(self) -> str:
-        return self._method.__name__
-
-    def __call__(self, name: str, value: Any, **kwargs) -> bool:
-        return self._method(name, value, **kwargs)
-
-
-def checker(method: CheckerMethod) -> ApplyCheckerMethod:
+class NotACheckerFunction(Exception):
     """
-    Decorator for configuration checker functions.
-    Returns a partial function that do not take the name and
-    value as argument.
-
-    For example:
-
-    @checker
-    def above_threshold(name: str, value: Any, threshold: float=0)->None:
-        if value<=threshold:
-            raise ConfigurationError(name, value, f"under the threshold ({threshold})")
-
-    # config_check can be used to check the inputs of several values for field1
-    config_check = { "field1" : above_threshold(threshold=5) }
-
-    # above_threshold can be called:
-    above_threshold(threshold=1.)("field1",1.2)
+    To be raised if a function is expected to be a CheckerMethod, but is not
     """
+    def __init__(self, function: Callable, issue: str)->None:
+        self._function = function
+        self._issue = issue
+    def __str__(self)->str:
+        return str(
+            f"{self._function.__name__} is not a valid configuration "
+            f"checker function: {self._issue}"
+        )
 
-    return ApplyCheckerMethod(method)
+def is_checker_function(function: Callable)->None:
+    """
+    Raises a NotACheckerFunction if the function does not 
+    has the signature of a CheckerMethod, i.e. Callable[[str, Any], None]
+    """
+    # a checker function must have two positional, first being a str
+    # other arguments have to be keyword based
+    parameters = inspect.signature(function).parameters
+    for index, key in enumerate(parameters.keys()):
+        value = parameters[key]
+        if index==0:
+            if value.default != inspect._empty:
+                raise NotACheckerFunction(
+                    function, f"first argument should be positional (and a string)"
+                )
+            if value.annotation != str:
+                raise NotACheckerFunction(
+                    function, f"first argument should be a string"
+                )
+        elif index==1:
+            if value.default != inspect._empty:
+                raise NotACheckerFunction(
+                    function, f"second argument should be positional"
+                )
+        else:
+            if value.default == inspect._empty:
+                raise NotACheckerFunction(
+                    function, f"only the first two arguments should be positional"
+                )
+
 
 
 ConfigTemplate = dict[str, Iterable[CheckerMethod] | "ConfigTemplate"]

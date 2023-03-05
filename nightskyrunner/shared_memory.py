@@ -1,6 +1,5 @@
 from typing import Optional
 import multiprocessing as mp
-from multiprocessing import managers, sharedctypes
 from threading import Lock
 
 MultiPDict = mp.managers.DictProxy

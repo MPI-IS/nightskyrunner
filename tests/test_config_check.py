@@ -6,8 +6,30 @@ import pytest
 import tempfile
 import copy
 from pathlib import Path
-from nightskyrunner import confi_check, config_checkers
+from nightskyrunner import config_check, config_checkers
 from nightskyrunner.config_error import ConfigError, ConfigErrors
+
+
+def test_is_checker_function():
+
+    def good(a: str, b: int, c:int = 1)->None:
+        ...
+
+    def bad1(a: int, b: int)->None:
+        ...
+
+    def bad2(a: str, b:int =1)->None:
+        ...
+
+    def bad3(a:str, b: int, c:int)->None:
+        ...
+        
+    config_checker.is_checker_function(good)
+
+    for bad in (bad1,bad2,bad3):
+        with pytest.raises(config_checker.NotACheckerFunction):
+            config_checker.is_checker_function(bad)
+    
 
 
 def test_configuration_value_error():

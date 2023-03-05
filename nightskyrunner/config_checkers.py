@@ -1,7 +1,6 @@
 import sys
 from typing import Any, Iterable
 from pathlib import Path
-from .config_check import checker
 from .config_error import ConfigError
 
 
@@ -12,7 +11,6 @@ def _wrong_type(name: str, value: Any, types: Iterable[type]) -> None:
     raise ConfigError(name, value, f"wrong type (got {type(value)}, expect {type_str})")
 
 
-@checker
 def isint(name: str, value: Any) -> None:
     """
     Raises a ConfigurationError is value is not an integer.
@@ -20,7 +18,6 @@ def isint(name: str, value: Any) -> None:
     return _wrong_type(name, value, (int,))
 
 
-@checker
 def minmax(name: str, value: Any, vmin=-sys.maxsize, vmax=sys.maxsize) -> None:
     """
     Raises a ConfigurationError if value is not in the internval vmin, vmax.
@@ -31,7 +28,6 @@ def minmax(name: str, value: Any, vmin=-sys.maxsize, vmax=sys.maxsize) -> None:
         raise ConfigValueError(name, value, f"value should be in [{vmin}, {vmax}]")
 
 
-@checker
 def is_directory(name: str, value: Any, create: bool = False) -> None:
     """ "
     Raises a ConfigurationError if value is not a directory.
