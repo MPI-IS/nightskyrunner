@@ -22,7 +22,7 @@ ClassPath = NewType("ClassPath", str)
 ModulePath = NewType("ModulePath", str)
 
 
-def _get_from_dotted(dotted_path: DottedPath) -> type | Callable:
+def _get_from_dotted(dotted_path: DottedPath | str) -> type | Callable:
 
     # if dotted_path is only the name of the class, it is expected
     # to be in global scope
@@ -132,7 +132,7 @@ def _configured_check_function(
     for kwarg in kwargs.keys():
         if kwarg not in skwargs:
             ConfigErrors.add(
-                f"{function.name()}: {kwarg} is not a supported argument "
+                f"{function.__name__}: {kwarg} is not a supported argument "
                 f"(supported: {','.join([k for k in skwargs])})"
             )
     return partial(function, **kwargs)
@@ -168,7 +168,7 @@ def _get_config_template(
     """
     For example:
     ```
-    modules = ["nightskyrunner.configchecks", "another.module"]
+    modules = ["nightskyrunner.config_checkers", "another.module"]
     {
        "field1": {
           "minmax": {"vmin":-1, "vmax": +1},

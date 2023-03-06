@@ -23,9 +23,9 @@ def minmax(name: str, value: Any, vmin=-sys.maxsize, vmax=sys.maxsize) -> None:
     Raises a ConfigurationError if value is not in the internval vmin, vmax.
     """
     if value < vmin:
-        raise ConfigValueError(name, value, f"value should be in [{vmin}, {vmax}]")
+        raise ConfigError(name, value, f"value should be in [{vmin}, {vmax}]")
     if value > vmax:
-        raise ConfigValueError(name, value, f"value should be in [{vmin}, {vmax}]")
+        raise ConfigError(name, value, f"value should be in [{vmin}, {vmax}]")
 
 
 def is_directory(name: str, value: Any, create: bool = False) -> None:
@@ -42,6 +42,6 @@ def is_directory(name: str, value: Any, create: bool = False) -> None:
         if create:
             value.mkdir(parents=True)
             return
-        raise ConfigValueError(name, value, "directory not found")
+        raise ConfigError(name, value, "directory not found")
     if not value.is_dir():
-        raise ConfigValueError(name, value, "not a directory")
+        raise ConfigError(name, value, "not a directory")

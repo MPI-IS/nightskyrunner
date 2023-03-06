@@ -16,12 +16,12 @@ def _override(c1: Config, c2: Config) -> None:
         try:
             value1 = c1[key]
         except KeyError:
-            raise ConfigValueError(
-                key, None, "can not override (no such configuration field)"
+            raise ConfigError(
+                name=key, message="can not override (no such configuration field)"
             )
         if type(value2) == dict:
             if not type(value1) == dict:
-                raise ConfigValueError(key, None, "can not override (expected a dict)")
+                raise ConfigError(name=key, message="can not override (expected a dict)")
             _override(value1, value2)
         else:
             c1[key] = value2

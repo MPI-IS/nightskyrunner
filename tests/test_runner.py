@@ -5,7 +5,7 @@ Unit-tests of the runner module
 import pytest
 import time
 from typing import Iterable, Callable, Generator, Type
-from nightskyrunner.config_getter import FixedDictConfigGetter
+from nightskyrunner.config_getter import FixedDict
 from nightskyrunner.runner import Runner, ThreadRunner, ProcessRunner, status_error
 from nightskyrunner.status import Status, State
 from nightskyrunner.shared_memory import SharedMemory
@@ -27,7 +27,7 @@ class TestRunnerMixin:
             raise TestError()
 
 
-_config = FixedDictConfigGetter({})
+_config = FixedDict({})
 
 
 def _interrupt() -> bool:

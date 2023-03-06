@@ -10,7 +10,6 @@ import inspect
 from typing import Iterable, Optional, Callable
 from multiprocessing import Process, Value
 from .status import Status, State, Level
-from . import configcheck
 from .config_getter import ConfigGetter
 from .shared_memory import MultiPDict, MpValue, SharedMemory
 

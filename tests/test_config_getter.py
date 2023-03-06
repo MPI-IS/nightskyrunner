@@ -10,8 +10,10 @@ from pathlib import Path
 from typing import Generator
 from nightskyrunner.config_getter import StaticTomlFile, DynamicTomlFile
 from nightskyrunner.config import Config
-from nightskyrunner.configcheck import ConfigTemplate, ConfigValueError
-from nightskyrunner.configcheckers import isint
+from nightskyrunner.config_check import ConfigTemplate, ConfigError
+from nightskyrunner.config_checkers import isint
+from nightskyrunner.factories import _get_config_template
+from nightskyrunner.config_error import ConfigErrors, ConfigError
 
 
 @pytest.fixture
@@ -33,14 +35,16 @@ def get_config(
     Returns a configuration template and a corresponding
     valid configuration
     """
-    checks = (isint(),)
-    config_template: ConfigTemplate = {
+    modules = ("nightskyrunner.config_checkers",)
+    checks = {"isint":{},}
+    config_template = {
         "a": checks,
         "b": checks,
         "c": {"c1": checks, "c2": checks},
     }
+    template = _get_config_template(modules, config_template)
     config: Config = {"a": 1, "b": 10, "c": {"c1": -1, "c2": 3}}
-    yield config_template, config
+    yield template, config
 
 
 def test_static_toml(get_tmp, get_config):
@@ -73,8 +77,9 @@ def test_static_toml(get_tmp, get_config):
     with open(path, "w+") as f:
         toml.dump(wrong_config, f)
     conf_getter = StaticTomlFile(path, config_template)
-    with pytest.raises(ConfigValueError):
-        conf_getter.get()
+    with pytest.raises(ConfigError):
+        with ConfigErrors("test"):
+            conf_getter.get()
 
 
 def test_dynamic_toml(get_tmp, get_config):

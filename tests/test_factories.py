@@ -1,4 +1,5 @@
 import pytest
+import copy
 import tempfile
 import toml
 from pathlib import Path
@@ -225,3 +226,148 @@ def test_toml_config_getter(reset_config_errors, get_tmp):
     get_config = config_getter.get()
     assert get_config["field1"] == 0
     assert get_config["field2"] == 12
+
+
+def test_check_configuration():
+
+    with tempfile.TemporaryDirectory() as tmp_dir_:
+
+        tmp_dir = Path(tmp_dir_)
+
+        template_: config_check.ConfigTemplate = {
+            "a": {"isint":{}, "minmax":{"vmin":-1, "vmax":1}},
+            "b": {"isint":{}},
+            "c": {"is_directory":{"create":False}},
+            "d": {"is_directory":{"create":True}},
+            "e": {},
+        }
+
+        template = _get_config_template(("nightskyrunner.config_checkers",),template_)
+
+        config_ok: Config = {
+            "a": 1,
+            "b": 20,
+            "c": tmp_dir,
+            "d": tmp_dir / "sub",
+            "e": 1.1,
+        }
+        check_configuration(template, config_ok)
+
+        config1: Config = copy.deepcopy(config_ok)
+        config1["a"] = 10
+        with pytest.raises(ConfigError):
+            with ConfigErrors("test"):
+                check_configuration(template, config1)
+
+        config2: Config = copy.deepcopy(config_ok)
+        config2["a"] = 1.2
+        with pytest.raises(ConfigError):
+            with ConfigErrors("test"):
+                check_configuration(template, config2)
+
+        config3: Config = copy.deepcopy(config_ok)
+        config3["b"] = 1.2
+        config3["c"] = Path("/no/such/path")
+        with pytest.raises(ConfigError):
+            with ConfigErrors("test"):
+                check_configuration(template, config3)
+
+        config4: Config = copy.deepcopy(config_ok)
+        config4["other"] = 1
+        with pytest.raises(ConfigError):
+            with ConfigErrors("test"):
+                check_configuration(template, config4)
+
+        config5: Config = copy.deepcopy(config_ok)
+        del config5["b"]
+        with pytest.raises(ConfigError):
+            with ConfigErrors("test"):
+                check_configuration(template, config5)
+
+
+def test_recursive_check_configuration():
+
+    sub1_template = ConfigTemplate = {
+        "s11": {"isint":{}},
+        "s12": {"isint":{}}
+    }
+
+    sub2_template = ConfigTemplate = {
+        "s21": {"isint:{}"},
+        "s22": sub1_template,
+        "s23": {"isint:{}"}
+    }
+
+    sub3_template = ConfigTemplate = {
+        "s31": {"isint":{},"minmax":{"vmin":-1,"vmax":1}}
+    }
+
+    template_: ConfigTemplate = {
+        "a": {"isint":{},"minmax":{"vmin":-1,"vmax":1}},
+        "s2": sub2_template,
+        "s3": sub3_template,
+        "b": {"isint":{}}
+    }
+
+    template = _get_config_template(("nightskyrunner.config_checkers",),template_)
+
+    config_ok: Config = {
+        "a": 1,
+        "s2": {
+            "s21": 4,
+            "s22": {
+                "s11": 2,
+                "s12": -8,
+            },
+            "s23": 0,
+        },
+        "s3": {"s31": 0},
+        "b": 100,
+    }
+    check_configuration(template, config_ok)
+
+    config_not_ok1: Config = {
+        "a": 1,
+        "s2": {
+            "s21": 4,
+            "s22": {
+                "s11": 2.1,  # !
+                "s12": -8,
+            },
+            "s23": 0,
+        },
+        "s3": {"s31": 0},
+        "b": 100,
+    }
+
+    config_not_ok2: Config = {
+        "a": 1,
+        "s2": {
+            "s21": 4,
+            "s22": 1,  # !
+        },
+        "s23": 0,
+        "s3": {"s31": 0},
+        "b": 100,
+    }
+
+    config_not_ok3: Config = {
+        "a": 1,
+        "s2": {
+            "s21": 4,
+            "s22": {
+                "s11": 2,
+                "s12": -8,
+            },
+            "s23": 0,
+        },
+        "s3": {"s31": 0},
+        "b": 100.1,  # !
+    }
+
+    for config in (config_not_ok1, config_not_ok2, config_not_ok3):
+        with pytest.raises(ConfigError):
+            with ConfigErrors("test"):
+                check_configuration(template, config)
+
+    
