@@ -38,7 +38,7 @@ See the configcheckers module for reusable checker methods.
 """
 
 import inspect
-from typing import Any, Optional, Generator, Iterable, Callable
+from typing import Any, Iterable, Callable
 from .config import Config
 from .config_error import ConfigError, ConfigErrors
 
@@ -87,21 +87,19 @@ def is_checker_function(function: Callable) -> None:
         if index == 0:
             if value.default != inspect._empty:
                 raise NotACheckerFunction(
-                    function, f"first argument should be positional (and a string)"
+                    function, "first argument should be positional (and a string)"
                 )
             if value.annotation != str:
-                raise NotACheckerFunction(
-                    function, f"first argument should be a string"
-                )
+                raise NotACheckerFunction(function, "first argument should be a string")
         elif index == 1:
             if value.default != inspect._empty:
                 raise NotACheckerFunction(
-                    function, f"second argument should be positional"
+                    function, "second argument should be positional"
                 )
         else:
             if value.default == inspect._empty:
                 raise NotACheckerFunction(
-                    function, f"only the first two arguments should be positional"
+                    function, "only the first two arguments should be positional"
                 )
 
 

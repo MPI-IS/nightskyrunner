@@ -3,11 +3,9 @@ Unit tests for the configcheck and configcheckers modules
 """
 
 import pytest
-import tempfile
-import copy
 from pathlib import Path
 from nightskyrunner import config_check, config_checkers
-from nightskyrunner.config_error import ConfigError, ConfigErrors
+from nightskyrunner.config_error import ConfigError
 
 
 def test_is_checker_function():

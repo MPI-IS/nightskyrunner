@@ -1,9 +1,9 @@
 import importlib
-import inspect
 import toml
 from pathlib import Path
 from functools import partial
 from typing import Optional, Iterable, Callable, Any, NewType, cast
+from .config import Config
 from .config_check import (
     ConfigTemplate,
     CheckerMethod,
@@ -13,6 +13,7 @@ from .config_check import (
 )
 from .config_error import ConfigErrors, ConfigError
 from .config_getter import ConfigGetter
+from .runner import Runner
 
 DottedPath = NewType("DottedPath", str)
 """
@@ -34,6 +35,7 @@ def _get_from_dotted(dotted_path: DottedPath | str) -> type | Callable:
             raise ImportError(
                 f"class {dotted_path} could not be found in the global scope"
             )
+        return class_
 
     # importing the package the class belongs to
     to_import, class_name = dotted_path.rsplit(".", 1)
@@ -341,16 +343,18 @@ class RunnerFactory:
     of ConfigGetter, see the function 'toml_config_getter'
     """
 
-    def __init__(self, name: str, runner: DottedClass, toml_config: Path) -> None:
-
+    def __init__(self, name: str, runner: DottedPath | Runner, toml_config: Path) -> None:
         self._name = name
         self._config_getter = toml_config_getter(toml_config)
         self._frequency: Optional[float]
         try:
-            self._frequency = self.config_getter.get()["frequency"]
+            self._frequency = float(self._config_getter.get()["frequency"])  # type: ignore
         except KeyError:
             self._frequency = None
-        self._runner_class = get_from_dotted(runner)
+        if issubclass(runner, Runner):
+            self._runner_class = runner
+        else:
+            self._runner_class = get_from_dotted(runner)
 
     def instantiate(
         self,
@@ -363,11 +367,11 @@ class RunnerFactory:
         """
         frequency: dict[str, float] = {"core_frequency": core_frequency}
         if self._frequency is not None:
-            frequency["frequency"] = frequency
+            frequency["frequency"] = self._frequency
         instance = self._runner_class(
             self._name, self._config_getter, interrupts=interrupts, **frequency
         )
         if override is not None:
-            config_getter.set_override(override)
-        config_getter.add_default_template(instance._default_template())
+            self._config_getter.set_override(override)
+        self._config_getter.add_default_template(instance._default_template())
         return instance

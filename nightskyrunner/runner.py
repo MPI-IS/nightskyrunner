@@ -7,11 +7,21 @@ method ('custom': developpers create subclasses of Runner implementing this meth
 import time
 import threading
 import inspect
-from typing import Iterable, Optional, Callable
+from functools import partial
+from typing import Iterable, Optional, Callable, Any
 from multiprocessing import Process, Value
 from .status import Status, State, Level
+from .config_check import (
+    ConfigTemplate,
+    CheckerMethod,
+    is_checker_function,
+    are_supported_kwargs,
+    NotACheckerFunction,
+)
+from .config import Config
 from .config_getter import ConfigGetter
 from .shared_memory import MultiPDict, MpValue, SharedMemory
+from .config_error import ConfigError, ConfigErrors
 
 
 class _Sleeper:
@@ -157,6 +167,9 @@ class Runner(_Sleeper):
         """
         return self._status.name
 
+    def get_config(self)->Config:
+        return self._config_getter.get()
+    
     def start(self):
         """
         Start the thread or process
@@ -165,7 +178,6 @@ class Runner(_Sleeper):
 
     def _monitor_stop(self, on_stop: Callable, blocking: bool) -> None:
         def _stop(self):
-            alive = self.alive()
             while self.alive():
                 time.sleep(0.002)
             on_stop()
@@ -232,18 +244,18 @@ class Runner(_Sleeper):
     def _default_template(self) -> ConfigTemplate:
         r: ConfigTemplate = {}
         with ConfigErrors(self._status.name):
-            for field_name, checkers in self.default_template():
-                r[field_name]: list[CheckerMethod] = []
+            for field_name, checkers in self.default_template().items():
+                r[field_name] = []
                 for checker, kwargs in checkers.items():
                     try:
                         is_checker_function(checker)
                     except NotACheckerFunction as ncf:
                         raise ConfigError(message=str(ncf))
                     are_supported_kwargs(checker, kwargs)
-                    r.append(partial(checker, **kwargs))
+                    r[field_name].append(partial(checker, **kwargs))  # type: ignore
         return r
 
-    def default_template(self) -> dict[str, dict[CheckerMethod : dict[str, Any]]]:
+    def default_template(self) -> dict[str, dict[CheckerMethod, dict[str, Any]]]:
         """
         Subclass may override this method to provide a default configuration
         template, e.g. returning:
@@ -352,7 +364,7 @@ class ProcessRunner(Runner):
 
     def stop(self, blocking: bool = False) -> None:
         self._status.state(State.stopping)
-        self._running.value = False
+        self._running.value = False  # type: ignore
         self._monitor_stop(self._on_stop, blocking)
 
     def alive(self) -> bool:

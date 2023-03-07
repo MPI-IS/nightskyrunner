@@ -1,5 +1,5 @@
 """
-Unit-tests of the runner module 
+Unit-tests of the runner module
 """
 
 import pytest

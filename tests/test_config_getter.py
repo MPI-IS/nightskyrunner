@@ -7,12 +7,11 @@ import tempfile
 import toml
 import copy
 from pathlib import Path
-from typing import Generator
+from typing import Generator, Any
 from nightskyrunner.config_getter import StaticTomlFile, DynamicTomlFile
 from nightskyrunner.config import Config
-from nightskyrunner.config_check import ConfigTemplate, ConfigError
-from nightskyrunner.config_checkers import isint
-from nightskyrunner.factories import _get_config_template
+from nightskyrunner.config_check import ConfigTemplate
+from nightskyrunner.factories import _get_config_template, ModulePath
 from nightskyrunner.config_error import ConfigErrors, ConfigError
 
 
@@ -35,8 +34,8 @@ def get_config(
     Returns a configuration template and a corresponding
     valid configuration
     """
-    modules = ("nightskyrunner.config_checkers",)
-    checks = {
+    modules = (ModulePath("nightskyrunner.config_checkers"),)
+    checks: dict[str, dict[str, dict[str, Any]]] = {
         "isint": {},
     }
     config_template = {

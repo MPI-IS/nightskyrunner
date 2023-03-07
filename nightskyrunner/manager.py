@@ -1,6 +1,3 @@
-from typing import NewType
-
-
 """
 [Phototaker]
 name = "taking pictures at night"

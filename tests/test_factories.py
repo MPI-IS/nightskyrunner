@@ -3,7 +3,7 @@ import copy
 import tempfile
 import toml
 from pathlib import Path
-from typing import Generator
+from typing import Generator, Callable, Iterable, Any
 from nightskyrunner.config_error import ConfigErrors, ConfigError
 from nightskyrunner.factories import (
     get_from_dotted,
@@ -14,9 +14,17 @@ from nightskyrunner.factories import (
     toml_config_getter,
     RunnerFactory,
 )
-from nightskyrunner.config_check import check_configuration
+from nightskyrunner.config import Config
+from nightskyrunner.config_check import (
+    check_configuration,
+    ConfigTemplate,
+    CheckerMethod,
+)
 from nightskyrunner.config_getter import FixedDict, DynamicTomlFile
 from nightskyrunner.config_checkers import isint, minmax
+from nightskyrunner.config_getter import ConfigGetter
+from nightskyrunner.runner import ThreadRunner, status_error
+from nightskyrunner.shared_memory import SharedMemory
 
 
 @pytest.fixture
@@ -196,7 +204,7 @@ def test_build_config_getter(reset_config_errors):
             config_getter = build_config_getter(
                 class_path, args, kwargs, modules, fields
             )
-            assert isinstance(config_getter, FixedDictConfigGetter)
+            assert isinstance(config_getter, FixedDict)
             config = config_getter.get()
 
 
@@ -236,7 +244,7 @@ def test_check_configuration():
 
         tmp_dir = Path(tmp_dir_)
 
-        template_: config_check.ConfigTemplate = {
+        template_: ConfigTemplate = {
             "a": {"isint": {}, "minmax": {"vmin": -1, "vmax": 1}},
             "b": {"isint": {}},
             "c": {"is_directory": {"create": False}},
@@ -371,6 +379,10 @@ def test_recursive_check_configuration():
 
 
 def test_runner_factory(get_tmp):
+    """
+    Tests for RunnerFactory
+    """
+    
     @status_error
     class ThreadTestRunner(ThreadRunner):
         def __init__(
@@ -382,13 +394,12 @@ def test_runner_factory(get_tmp):
             core_frequency: float = 200.0,
         ) -> None:
             ThreadRunner.__init__(
-                self, name, _config, frequency, interrupts, core_frequency
+                self, name, config_getter, frequency, interrupts, core_frequency
             )
-            TestRunnerMixin.__init__(self)
 
         def iterate(self):
             d = SharedMemory.get("testf")
-            config = self._config_getter.get()
+            config = self.get_config()
             d["c1"] = config["c1"]
             d["c2"] = config["c2"]
 
@@ -397,12 +408,13 @@ def test_runner_factory(get_tmp):
                 "c1": {isint: {}, minmax: {"vmin": -10, "vmax": +10}},
                 "c2": {isint: {}, minmax: {"vmin": -10, "vmax": +10}},
             }
-
+    
     tmp_dir = get_tmp
+
+    config_ok = ( {"c1": +2, "c2": -1}, True )
+    config_error = ( {"c1": +2, "c2": -6}, False )
+
     config_path = tmp_dir / "config.toml"
-    config = {"c1": +2, "c2": -1}
-    with open(config_path, "w") as f:
-        toml.dump(config, f)
 
     main_path = tmp_dir / "main.toml"
     toml_content = {
@@ -417,9 +429,26 @@ def test_runner_factory(get_tmp):
     }
     with open(main_path, "w") as f:
         toml.dump(toml_content, f)
+        
+    for config, ok in (config_ok, config_error):
 
-    runner_factory = RunnerFactory(
-        name="runner_test", runner="ThreadTestRunner", toml_config=main_path
-    )
+        with open(config_path, "w+") as f:
+            toml.dump(config, f)
 
-    instance = runner_factory.instantiate()
+
+        if ok:
+            runner_factory = RunnerFactory(
+                name="runner_test", runner=ThreadTestRunner, toml_config=main_path
+            )
+            instance = runner_factory.instantiate()
+            instance.iterate()
+            d = SharedMemory.get("testf")
+            assert d["c1"] == config["c1"]
+            assert d["c2"] == config["c2"]
+
+            
+        else:
+            with pytest.raises(ConfigError):
+                RunnerFactory(
+                    name="runner_test", runner=ThreadTestRunner, toml_config=main_path
+                )

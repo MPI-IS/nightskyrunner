@@ -7,9 +7,8 @@ import toml
 from typing import Optional
 from pathlib import Path
 from .config import Config
-from .config_error import ConfigError
+from .config_error import ConfigError, ConfigErrors
 from .config_check import ConfigTemplate, check_configuration
-
 
 def _override(c1: Config, c2: Config) -> None:
     for key, value2 in c2.items():
@@ -41,10 +40,12 @@ class ConfigGetter:
     """
 
     def __init__(
-        self,
-        template: ConfigTemplate = {},
-        override: Optional[Config] = None,
+            self,
+            info: str,
+            template: ConfigTemplate = {},
+            override: Optional[Config] = None,
     ) -> None:
+        self._info = info
         self._template = template
         self._override = override
 
@@ -86,7 +87,8 @@ class ConfigGetter:
         if self._override is not None:
             _override(config, self._override)
         if self._template:
-            check_configuration(self._template, config)
+            with ConfigErrors(self._info):
+                check_configuration(self._template, config)
         return config
 
 
@@ -100,10 +102,10 @@ class FixedDict(ConfigGetter):
     def __init__(
         self,
         config: Config,
-        template: Optional[ConfigTemplate] = None,
+        template: ConfigTemplate = {},
         override: Optional[Config] = None,
     ) -> None:
-        super().__init__(template=template, override=override)
+        super().__init__(str(config),template=template, override=override)
         self._config = config
 
     def _get(self):
@@ -122,10 +124,10 @@ class StaticTomlFile(ConfigGetter):
     def __init__(
         self,
         path: str | Path,
-        template: Optional[ConfigTemplate] = None,
+        template: ConfigTemplate = {},
         override: Optional[Config] = None,
     ) -> None:
-        super().__init__(template=template, override=override)
+        super().__init__(str(path), template=template, override=override)
         if isinstance(path, str):
             path = Path(path)
         if not path.is_file():
@@ -150,10 +152,10 @@ class DynamicTomlFile(ConfigGetter):
     def __init__(
         self,
         path: str | Path,
-        template: Optional[ConfigTemplate] = None,
+        template: ConfigTemplate = {},
         override: Optional[Config] = None,
     ) -> None:
-        super().__init__(template=template, override=override)
+        super().__init__(str(path), template=template, override=override)
         if isinstance(path, str):
             path = Path(path)
         if not path.is_file():
