@@ -11,25 +11,23 @@ from nightskyrunner.config_error import ConfigError, ConfigErrors
 
 
 def test_is_checker_function():
-
-    def good(a: str, b: int, c:int = 1)->None:
+    def good(a: str, b: int, c: int = 1) -> None:
         ...
 
-    def bad1(a: int, b: int)->None:
+    def bad1(a: int, b: int) -> None:
         ...
 
-    def bad2(a: str, b:int =1)->None:
+    def bad2(a: str, b: int = 1) -> None:
         ...
 
-    def bad3(a:str, b: int, c:int)->None:
+    def bad3(a: str, b: int, c: int) -> None:
         ...
-        
+
     config_check.is_checker_function(good)
 
-    for bad in (bad1,bad2,bad3):
+    for bad in (bad1, bad2, bad3):
         with pytest.raises(config_check.NotACheckerFunction):
             config_check.is_checker_function(bad)
-    
 
 
 def test_checker_methods():
@@ -51,6 +49,3 @@ def test_checker_methods():
     with pytest.raises(ConfigError):
         p = Path("/not/existing/path")
         config_checkers.is_directory("", p, create=False)
-
-
-

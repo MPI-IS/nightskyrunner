@@ -126,7 +126,7 @@ class Runner(_Sleeper):
         an interrupt returns True during the wait, the wait is interrupted.
         Expected usage: If the frequency is low, an instance of runner may take a
         long time to exit after a call to the 'stop' method. An interrupt allows
-        for shorter this time
+        for shortening this time
       core_frequency: frequency at which interrupts will be called.
 
     Raises:
@@ -229,6 +229,36 @@ class Runner(_Sleeper):
     def _run(self):
         raise NotImplementedError()
 
+    def _default_template(self) -> ConfigTemplate:
+        r: ConfigTemplate = {}
+        with ConfigErrors(self._status.name):
+            for field_name, checkers in self.default_template():
+                r[field_name]: list[CheckerMethod] = []
+                for checker, kwargs in checkers.items():
+                    try:
+                        is_checker_function(checker)
+                    except NotACheckerFunction as ncf:
+                        raise ConfigError(message=str(ncf))
+                    are_supported_kwargs(checker, kwargs)
+                    r.append(partial(checker, **kwargs))
+        return r
+
+    def default_template(self) -> dict[str, dict[CheckerMethod : dict[str, Any]]]:
+        """
+        Subclass may override this method to provide a default configuration
+        template, e.g. returning:
+        ```
+          {
+            "a": {isint: {}, minmax: {"vmin":-10,"vmax":+10}},
+            "b": {is_existing_path:{"create":True}}
+          }
+        ```
+        will indicate to the user of the runner that the configuration
+        field "a" should be an integer between -10 and 10, and
+        field "b" is a path that will be created if it does not exists.
+        """
+        return {}
+
 
 class ThreadRunner(Runner):
     """
@@ -239,7 +269,7 @@ class ThreadRunner(Runner):
         self,
         name: str,
         config_getter: ConfigGetter,
-        frequency: float,
+        frequency: float = 1.0,
         interrupts: Iterable[Callable[[], bool]] = [],
         core_frequency: float = 0.005,
     ) -> None:
@@ -299,7 +329,7 @@ class ProcessRunner(Runner):
         self,
         name: str,
         config_getter: ConfigGetter,
-        frequency: float,
+        frequency: float = 1.0,
         interrupts: Iterable[Callable[[], bool]] = [],
         core_frequency: float = 0.005,
     ) -> None:

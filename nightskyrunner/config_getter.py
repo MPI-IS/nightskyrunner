@@ -21,7 +21,9 @@ def _override(c1: Config, c2: Config) -> None:
             )
         if type(value2) == dict:
             if not type(value1) == dict:
-                raise ConfigError(name=key, message="can not override (expected a dict)")
+                raise ConfigError(
+                    name=key, message="can not override (expected a dict)"
+                )
             _override(value1, value2)
         else:
             c1[key] = value2
@@ -40,11 +42,29 @@ class ConfigGetter:
 
     def __init__(
         self,
-        template: Optional[ConfigTemplate] = None,
+        template: ConfigTemplate = {},
         override: Optional[Config] = None,
     ) -> None:
         self._template = template
         self._override = override
+
+    def set_override(self, override: Config) -> None:
+        """
+        Overwrite the 'override' configuration provided
+        to the constructor
+        """
+        self._override = override
+
+    def add_default_template(self, template: ConfigTemplate) -> None:
+        """
+        If the template provided to this method has fields
+        that have not been provided to the constructor (i.e. no
+        such key in the template dict provided to the constructor),
+        fills the class template with these fields.
+        """
+        for field, checkers in template.items():
+            if field not in self._template:
+                self._template[field] = checkers
 
     def _get(self) -> Config:
         raise NotImplementedError()
@@ -65,7 +85,7 @@ class ConfigGetter:
         config = self._get()
         if self._override is not None:
             _override(config, self._override)
-        if self._template is not None:
+        if self._template:
             check_configuration(self._template, config)
         return config
 

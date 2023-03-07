@@ -15,16 +15,17 @@ class ConfigError(Exception):
     """
     Error to be raised when there is an error in the configuration
     provided by the user.
-    An instance of ConfigError may contain information related to 
-    several error messages. Once an instance has been created, 
+    An instance of ConfigError may contain information related to
+    several error messages. Once an instance has been created,
     errors can be added to it.
 
     Args:
       name: arbitrary name (key) of the error
-      value: entered by the user, which turned out to be 
+      value: entered by the user, which turned out to be
         incorrect or not supported
       message: arbitrary error message
     """
+
     def __init__(
         self,
         name: Optional[str] = None,
@@ -86,24 +87,24 @@ class ConfigErrors:
     # the ConfigError corresponding to all the errors
     # related to "arbitrary_key" is raised when exiting
     # the context manager
-        
+
     # getting the instance of ConfigError related
     # to "arbitrary_key"
     config_error = ConfigErrors.errors()["arbitrary_key"]
     ```
     """
-    
+
     _errors: dict[str, ConfigError] = {}
     _current = ConfigError()
     _key: Optional[str] = None
 
-    def __init__(self, key: str)->None:
+    def __init__(self, key: str) -> None:
         cls = self.__class__
         cls._current = ConfigError()
         cls._key = key
 
     @classmethod
-    def clear(cls)->None:
+    def clear(cls) -> None:
         """
         clear all the stored instances of ConfigError,
         i.e. the get method will return an empty dictionary

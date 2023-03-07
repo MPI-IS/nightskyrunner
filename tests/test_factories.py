@@ -12,9 +12,11 @@ from nightskyrunner.factories import (
     _get_config_template,
     build_config_getter,
     toml_config_getter,
+    RunnerFactory,
 )
 from nightskyrunner.config_check import check_configuration
 from nightskyrunner.config_getter import FixedDict, DynamicTomlFile
+from nightskyrunner.config_checkers import isint, minmax
 
 
 @pytest.fixture
@@ -235,14 +237,14 @@ def test_check_configuration():
         tmp_dir = Path(tmp_dir_)
 
         template_: config_check.ConfigTemplate = {
-            "a": {"isint":{}, "minmax":{"vmin":-1, "vmax":1}},
-            "b": {"isint":{}},
-            "c": {"is_directory":{"create":False}},
-            "d": {"is_directory":{"create":True}},
+            "a": {"isint": {}, "minmax": {"vmin": -1, "vmax": 1}},
+            "b": {"isint": {}},
+            "c": {"is_directory": {"create": False}},
+            "d": {"is_directory": {"create": True}},
             "e": {},
         }
 
-        template = _get_config_template(("nightskyrunner.config_checkers",),template_)
+        template = _get_config_template(("nightskyrunner.config_checkers",), template_)
 
         config_ok: Config = {
             "a": 1,
@@ -287,29 +289,26 @@ def test_check_configuration():
 
 def test_recursive_check_configuration():
 
-    sub1_template = ConfigTemplate = {
-        "s11": {"isint":{}},
-        "s12": {"isint":{}}
-    }
+    sub1_template = ConfigTemplate = {"s11": {"isint": {}}, "s12": {"isint": {}}}
 
     sub2_template = ConfigTemplate = {
         "s21": {"isint:{}"},
         "s22": sub1_template,
-        "s23": {"isint:{}"}
+        "s23": {"isint:{}"},
     }
 
     sub3_template = ConfigTemplate = {
-        "s31": {"isint":{},"minmax":{"vmin":-1,"vmax":1}}
+        "s31": {"isint": {}, "minmax": {"vmin": -1, "vmax": 1}}
     }
 
     template_: ConfigTemplate = {
-        "a": {"isint":{},"minmax":{"vmin":-1,"vmax":1}},
+        "a": {"isint": {}, "minmax": {"vmin": -1, "vmax": 1}},
         "s2": sub2_template,
         "s3": sub3_template,
-        "b": {"isint":{}}
+        "b": {"isint": {}},
     }
 
-    template = _get_config_template(("nightskyrunner.config_checkers",),template_)
+    template = _get_config_template(("nightskyrunner.config_checkers",), template_)
 
     config_ok: Config = {
         "a": 1,
@@ -370,4 +369,57 @@ def test_recursive_check_configuration():
             with ConfigErrors("test"):
                 check_configuration(template, config)
 
-    
+
+def test_runner_factory(get_tmp):
+    @status_error
+    class ThreadTestRunner(ThreadRunner):
+        def __init__(
+            self,
+            name: str,
+            config_getter: ConfigGetter,
+            frequency: float = 1,
+            interrupts: Iterable[Callable[[], bool]] = [],
+            core_frequency: float = 200.0,
+        ) -> None:
+            ThreadRunner.__init__(
+                self, name, _config, frequency, interrupts, core_frequency
+            )
+            TestRunnerMixin.__init__(self)
+
+        def iterate(self):
+            d = SharedMemory.get("testf")
+            config = self._config_getter.get()
+            d["c1"] = config["c1"]
+            d["c2"] = config["c2"]
+
+        def default_template(self) -> dict[str, dict[CheckerMethod : dict[str, Any]]]:
+            return {
+                "c1": {isint: {}, minmax: {"vmin": -10, "vmax": +10}},
+                "c2": {isint: {}, minmax: {"vmin": -10, "vmax": +10}},
+            }
+
+    tmp_dir = get_tmp
+    config_path = tmp_dir / "config.toml"
+    config = {"c1": +2, "c2": -1}
+    with open(config_path, "w") as f:
+        toml.dump(config, f)
+
+    main_path = tmp_dir / "main.toml"
+    toml_content = {
+        "class": "nightskyrunner.config_getter.DynamicTomlFile",
+        "args": [f"{config_path}"],
+        "kwargs": {},
+        "template": {
+            "modules": ["nightskyrunner.config_checkers"],
+            "c1": {"isint": {}, "minmax": {"vmin": -10, "vmax": +10}},
+            "c2": {"isint": {}, "minmax": {"vmin": -5, "vmax": +5}},  # ! stricter
+        },
+    }
+    with open(main_path, "w") as f:
+        toml.dump(toml_content, f)
+
+    runner_factory = RunnerFactory(
+        name="runner_test", runner="ThreadTestRunner", toml_config=main_path
+    )
+
+    instance = runner_factory.instantiate()

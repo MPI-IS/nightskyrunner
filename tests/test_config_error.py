@@ -9,7 +9,7 @@ def test_config_error():
     """
     Testing the basic functionality of ConfigError
     """
-    
+
     error = ConfigError(name="e1")
 
     error.add(name="e2")
@@ -27,7 +27,6 @@ def test_config_errors():
     Testing the basic functionality of ConfigErrors
     """
 
-    
     try:
         with ConfigErrors("id1"):
             ConfigErrors.add(name="e1", value=1)

@@ -8,7 +8,8 @@ from .config_check import (
     ConfigTemplate,
     CheckerMethod,
     NotACheckerFunction,
-    is_checker_function
+    is_checker_function,
+    are_supported_kwargs,
 )
 from .config_error import ConfigErrors, ConfigError
 from .config_getter import ConfigGetter
@@ -117,24 +118,17 @@ def _configured_check_function(
         else:
             function = get_from_dotted(function_name, prefixes=None)
     except ImportError as e:
-        raise ConfigError(message=f"failed to import {function_name} from {modules}: {str(e)}")
+        raise ConfigError(
+            message=f"failed to import {function_name} from {modules}: {str(e)}"
+        )
     try:
         is_checker_function(function)
     except NotACheckerFunction as ncf:
         raise ConfigError(message=str(ncf))
-    # keyword arguments supported by the function
-    skwargs = [
-        key for key, value in inspect.signature(function).parameters.items()
-        if value.default != inspect._empty
-    ]
-    # checking the kwargs passed by the users match the
-    # supported keyword arguments
-    for kwarg in kwargs.keys():
-        if kwarg not in skwargs:
-            ConfigErrors.add(
-                f"{function.__name__}: {kwarg} is not a supported argument "
-                f"(supported: {','.join([k for k in skwargs])})"
-            )
+    try:
+        are_supported_kwargs(function, kwargs)
+    except ConfigError as ce:
+        ConfigErrors.append(ce)
     return partial(function, **kwargs)
 
 
@@ -213,7 +207,7 @@ def build_config_getter(
     {},  # kwargs to pass to class constructor
     # dotted path to modules with definition of config checkers functions
     modules = ["nightskyrunner.configchecks", "another.module"]
-    # configuration of configuration checkers
+    # configuration template
     {
        "field1": {
           "minmax": {"vmin":-1, "vmax": +1},
@@ -331,3 +325,49 @@ def toml_config_getter(filepath: Path) -> ConfigGetter:
     with ConfigErrors(str(filepath)):
         config_getter = dict_config_getter(str(filepath), content)
         return config_getter
+
+
+class RunnerFactory:
+    """
+    For example:
+    ```
+      name = "my_runner"
+      runner = "dotted.path.to.runner.class"
+      toml_config = /path/to/toml/path
+    ```
+    Prepare for the instantiation of the runner class
+    based on the provided configuration toml file
+    (which provides information for the related instance
+    of ConfigGetter, see the function 'toml_config_getter'
+    """
+
+    def __init__(self, name: str, runner: DottedClass, toml_config: Path) -> None:
+
+        self._name = name
+        self._config_getter = toml_config_getter(toml_config)
+        self._frequency: Optional[float]
+        try:
+            self._frequency = self.config_getter.get()["frequency"]
+        except KeyError:
+            self._frequency = None
+        self._runner_class = get_from_dotted(runner)
+
+    def instantiate(
+        self,
+        interrupts: Iterable[Callable[[], bool]] = [],
+        core_frequency: float = 0.005,
+        override: Optional[Config] = None,
+    ) -> Runner:
+        """
+        Return the instance of Runner
+        """
+        frequency: dict[str, float] = {"core_frequency": core_frequency}
+        if self._frequency is not None:
+            frequency["frequency"] = frequency
+        instance = self._runner_class(
+            self._name, self._config_getter, interrupts=interrupts, **frequency
+        )
+        if override is not None:
+            config_getter.set_override(override)
+        config_getter.add_default_template(instance._default_template())
+        return instance

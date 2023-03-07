@@ -57,22 +57,26 @@ Raises:
     is not suitable
 """
 
+
 class NotACheckerFunction(Exception):
     """
     To be raised if a function is expected to be a CheckerMethod, but is not
     """
-    def __init__(self, function: Callable, issue: str)->None:
+
+    def __init__(self, function: Callable, issue: str) -> None:
         self._function = function
         self._issue = issue
-    def __str__(self)->str:
+
+    def __str__(self) -> str:
         return str(
             f"{self._function.__name__} is not a valid configuration "
             f"checker function: {self._issue}"
         )
 
-def is_checker_function(function: Callable)->None:
+
+def is_checker_function(function: Callable) -> None:
     """
-    Raises a NotACheckerFunction if the function does not 
+    Raises a NotACheckerFunction if the function does not
     has the signature of a CheckerMethod, i.e. Callable[[str, Any], None]
     """
     # a checker function must have two positional, first being a str
@@ -80,7 +84,7 @@ def is_checker_function(function: Callable)->None:
     parameters = inspect.signature(function).parameters
     for index, key in enumerate(parameters.keys()):
         value = parameters[key]
-        if index==0:
+        if index == 0:
             if value.default != inspect._empty:
                 raise NotACheckerFunction(
                     function, f"first argument should be positional (and a string)"
@@ -89,7 +93,7 @@ def is_checker_function(function: Callable)->None:
                 raise NotACheckerFunction(
                     function, f"first argument should be a string"
                 )
-        elif index==1:
+        elif index == 1:
             if value.default != inspect._empty:
                 raise NotACheckerFunction(
                     function, f"second argument should be positional"
@@ -100,6 +104,29 @@ def is_checker_function(function: Callable)->None:
                     function, f"only the first two arguments should be positional"
                 )
 
+
+def are_supported_kwargs(function: CheckerMethod, kwargs: dict[str, Any]) -> None:
+    """
+    Raises a ConfigError if any of the kwargs is not supported by the function
+    """
+    error = ConfigError()
+    skwargs = [
+        key
+        for key, value in inspect.signature(function).parameters.items()
+        if value.default != inspect._empty
+    ]
+    # checking the kwargs passed by the users match the
+    # supported keyword arguments
+    for kwarg in kwargs.keys():
+        if kwarg not in skwargs:
+            error.add(
+                message=str(
+                    f"{function.__name__}: {kwarg} is not a supported argument "
+                    f"(supported: {','.join([k for k in skwargs])})"
+                )
+            )
+    if error.has_error():
+        raise error
 
 
 ConfigTemplate = dict[str, Iterable[CheckerMethod] | "ConfigTemplate"]

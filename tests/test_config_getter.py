@@ -36,7 +36,9 @@ def get_config(
     valid configuration
     """
     modules = ("nightskyrunner.config_checkers",)
-    checks = {"isint":{},}
+    checks = {
+        "isint": {},
+    }
     config_template = {
         "a": checks,
         "b": checks,
