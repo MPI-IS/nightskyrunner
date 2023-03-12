@@ -38,7 +38,7 @@ See the configcheckers module for reusable checker methods.
 """
 
 import inspect
-from typing import Any, Iterable, Callable
+from typing import Any, Iterable, Callable, Union
 from .config import Config
 from .config_error import ConfigError, ConfigErrors
 
@@ -131,6 +131,28 @@ ConfigTemplate = dict[str, Iterable[CheckerMethod] | "ConfigTemplate"]
 """
 A template is a dictionary allowing the developer to specify the
 criterion a configuration dictionary must apply to be valid.
+"""
+
+CheckersTemplate = list[tuple[str, dict[str, Any]]]
+"""
+List of checker functions associated with their kwargs, e.g:
+```
+[ ("minmax",{minv=-1,maxv:+1}), ("isint":{}) ]
+```
+"""
+
+ConfigTemplateSpec = dict[str, Union[CheckersTemplate, "ConfigTemplateSpec"]]
+"""
+A structure suitable for generating ConfigTemplate, e.g.
+```
+{
+  "a" : [ ("minmax",{minv=-1,maxv:+1}), ("isint":{}) ],
+  "b" : {
+    "b1" : [("isint":{})],
+    "b2" : [ ("minmax",{minv=0,maxv:+2}), ("isint":{}) ],
+  }
+}
+```
 """
 
 

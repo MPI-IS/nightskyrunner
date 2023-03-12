@@ -10,6 +10,7 @@ from .config import Config
 from .config_error import ConfigError, ConfigErrors
 from .config_check import ConfigTemplate, check_configuration
 
+
 def _override(c1: Config, c2: Config) -> None:
     for key, value2 in c2.items():
         try:
@@ -40,10 +41,10 @@ class ConfigGetter:
     """
 
     def __init__(
-            self,
-            info: str,
-            template: ConfigTemplate = {},
-            override: Optional[Config] = None,
+        self,
+        info: str,
+        template: ConfigTemplate = {},
+        override: Optional[Config] = None,
     ) -> None:
         self._info = info
         self._template = template
@@ -105,7 +106,7 @@ class FixedDict(ConfigGetter):
         template: ConfigTemplate = {},
         override: Optional[Config] = None,
     ) -> None:
-        super().__init__(str(config),template=template, override=override)
+        super().__init__(str(config), template=template, override=override)
         self._config = config
 
     def _get(self):

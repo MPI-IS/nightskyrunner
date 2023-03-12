@@ -1,11 +1,13 @@
 import importlib
 import toml
 from pathlib import Path
-from functools import partial
-from typing import Optional, Iterable, Callable, Any, NewType, cast
+from functools import partial, singledispatch
+from typing import Optional, Iterable, Callable, Any, NewType, cast, Type
 from .config import Config
 from .config_check import (
     ConfigTemplate,
+    ConfigTemplateSpec,
+    CheckersTemplate,
     CheckerMethod,
     NotACheckerFunction,
     is_checker_function,
@@ -131,20 +133,21 @@ def _configured_check_function(
         are_supported_kwargs(function, kwargs)
     except ConfigError as ce:
         ConfigErrors.append(ce)
-    return partial(function, **kwargs)
+    p = partial(function, **kwargs)
+    return p
 
 
 def _field_template_config(
-    modules: Iterable[ModulePath], fields: dict[str, dict[str, Any]]
+    modules: Iterable[ModulePath], fields: CheckersTemplate
 ) -> list[CheckerMethod]:
     """
     For example:
     ```
     modules = ["nightskyrunner.configchecks", "another.module"]
-    {
-      "minmax": {"vmin":-1, "vmax": +1},
-      "isint": {}
-    }
+    [
+      ("minmax", {"vmin":-1, "vmax": +1}),
+      ("isint", {})
+    ]
     ```
     returns the partial functions:
     ```
@@ -153,37 +156,53 @@ def _field_template_config(
     ```
     """
     return [
-        _configured_check_function(modules, field, kwargs)
-        for field, kwargs in fields.items()
+        _configured_check_function(modules, field, kwargs) for field, kwargs in fields
     ]
 
 
 def _get_config_template(
-    modules: Iterable[ModulePath], fields: dict[str, dict[str, dict[str, Any]]]
+    modules: Iterable[ModulePath],
+    fields: ConfigTemplateSpec,
 ) -> ConfigTemplate:
     """
     For example:
     ```
     modules = ["nightskyrunner.config_checkers", "another.module"]
     {
-       "field1": {
-          "minmax": {"vmin":-1, "vmax": +1},
-          "isint": {}
+       "field1": [
+          ("minmax", {"vmin":-1, "vmax": +1}),
+          ("isint", {})
        },
        "field2": {
-          "isint": {}
+          "field2-1": ("isint", {}),
+          "field2-1": ("isint", {})
        }
     ```
     returns the partial functions:
     ```
     {
        "field1": [minmax(vmin=-1, vmax=1),isint()],
-       "field2": [isint()]
+       "field2": { "field2-1":[isint()], "field2-1":[isint()] }
     }
     ```
     """
-    r: ConfigTemplate = {}
-    for field_name, checkers in fields.items():
+
+    @singledispatch
+    def _add_field(
+            checkers = list | dict,
+            modules = list,
+            field_name = str,
+            template = dict
+    ) -> None:
+        ...
+
+    @_add_field.register
+    def _add_checkers(
+            checkers: list,  # i.e. CheckersTemplate
+            modules: list,  # i.e. Iterable[ModulePath],
+            field_name: str,
+            template: dict  ## i.e. ConfigTemplate,
+    ) -> None:
         try:
             r[field_name] = _field_template_config(modules, checkers)
         except Exception as e:
@@ -191,6 +210,20 @@ def _get_config_template(
                 ConfigErrors.append(e)
             else:
                 ConfigErrors.add(name=field_name, message=str(e))
+
+    @_add_field.register
+    def _add_config_template(
+            checkers: dict,  # i.e. ConfigTemplateSpec
+            modules: list,  # i.e. Iterable[ModulePath]
+            field_name: str,
+            template: dict,  # i.e. ConfigTemplate
+    ) -> None:
+        template[field_name] = _get_config_template(modules, checkers)
+
+    r: ConfigTemplate = {}
+    
+    for field_name, checkers in fields.items():
+        _add_field(checkers, modules, field_name, r)
     return r
 
 
@@ -199,7 +232,7 @@ def build_config_getter(
     args: Iterable[Any],
     kwargs: dict[str, Any],
     checkers_modules: Iterable[ModulePath],
-    checkers_fields: dict[str, dict[str, dict[str, Any]]],
+    checkers_fields: ConfigTemplateSpec,
 ):
     """
     For example:
@@ -343,7 +376,9 @@ class RunnerFactory:
     of ConfigGetter, see the function 'toml_config_getter'
     """
 
-    def __init__(self, name: str, runner: DottedPath | Runner, toml_config: Path) -> None:
+    def __init__(
+        self, name: str, runner: DottedPath | Type[Runner], toml_config: Path
+    ) -> None:
         self._name = name
         self._config_getter = toml_config_getter(toml_config)
         self._frequency: Optional[float]
@@ -351,10 +386,11 @@ class RunnerFactory:
             self._frequency = float(self._config_getter.get()["frequency"])  # type: ignore
         except KeyError:
             self._frequency = None
-        if issubclass(runner, Runner):
-            self._runner_class = runner
+        self._runner_class: Type[Runner]
+        if type(runner) == Type[Runner]:
+            self._runner_class = runner  # type: ignore
         else:
-            self._runner_class = get_from_dotted(runner)
+            self._runner_class = get_from_dotted(runner)  # type: ignore
 
     def instantiate(
         self,

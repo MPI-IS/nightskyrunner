@@ -167,9 +167,9 @@ class Runner(_Sleeper):
         """
         return self._status.name
 
-    def get_config(self)->Config:
+    def get_config(self) -> Config:
         return self._config_getter.get()
-    
+
     def start(self):
         """
         Start the thread or process

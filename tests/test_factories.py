@@ -18,6 +18,7 @@ from nightskyrunner.config import Config
 from nightskyrunner.config_check import (
     check_configuration,
     ConfigTemplate,
+    ConfigTemplateSpec,
     CheckerMethod,
 )
 from nightskyrunner.config_getter import FixedDict, DynamicTomlFile
@@ -123,7 +124,7 @@ def test_configured_check_function(reset_config_errors):
 def test_field_template_config(reset_config_errors):
 
     modules = ["nightskyrunner.config_checkers", "another.module"]
-    checkers = {"minmax": {"vmin": -2, "vmax": +3}, "isint": {}}
+    checkers = [ ("minmax", {"vmin": -2, "vmax": +3}), ("isint", {}) ]
     functions = _field_template_config(modules, checkers)
     good_values = {"good1": 2, "good2": -1}
     bad_values = {"bad1": -3, "bad2": 1.1}
@@ -140,24 +141,49 @@ def test_field_template_config(reset_config_errors):
 def test_get_config_template(reset_config_errors):
 
     modules = ["another.module", "nightskyrunner.config_checkers"]
-    fields = {
-        "field1": {"minmax": {"vmin": -1, "vmax": +1}, "isint": {}},
-        "field2": {"isint": {}},
+    fields: ConfigTemplateSpec = {
+        "field1": [("minmax", {"vmin": -1, "vmax": +1}), ("isint", {})],
+        "field2": {
+            "field21": [("minmax", {"vmin": -10, "vmax": +10}), ("isint", {})],
+            "field22": [("isint", {})],
+        },
+        "field3": [("isint", {})],
     }
 
     template = _get_config_template(modules, fields)
 
-    good_config = {"field1": 0, "field2": 12}
+    good_config: Config = {
+        "field1": 0,
+        "field2": {"field21": -2, "field22": 11},
+        "field3": -4,
+    }
 
-    bad_config1 = {"field1": -2, "field2": 0}
-
-    bad_config2 = {"field1": 0, "field2": 1.1}
+    bad_config1: Config = {
+        "field1": -2,
+        "field2": {"field21": -2, "field22": 11},
+        "field3": -4,
+    }
+    bad_config2: Config = {
+        "field1": 1,
+        "field2": {"field21": -2, "field22": 1.1},
+        "field3": -4,
+    }
+    bad_config3: Config = {
+        "field1": 1,
+        "field2": {"field21": -2, "field22": 11},
+        "field3": -3.3,
+    }
+    bad_config4: Config = {
+        "field1": -2,
+        "field2": {"field21": -2.1, "field22": 11},
+        "field3": -4,
+    }
 
     with ConfigErrors("test"):
         check_configuration(template, good_config)
         assert not ConfigErrors.has_error()
 
-    for bad_config in (bad_config1, bad_config2):
+    for bad_config in (bad_config1, bad_config2, bad_config3, bad_config4):
         with pytest.raises(ConfigError):
             with ConfigErrors("test"):
                 check_configuration(template, bad_config)
@@ -171,8 +197,8 @@ def test_build_config_getter(reset_config_errors):
     kwargs = {}
     modules = ["another.module", "nightskyrunner.config_checkers"]
     fields = {
-        "field1": {"minmax": {"vmin": -1, "vmax": +1}, "isint": {}},
-        "field2": {"isint": {}},
+        "field1": [ ("minmax", {"vmin": -1, "vmax": +1}), ("isint", {}) ],
+        "field2": [("isint", {})],
     }
 
     with ConfigErrors("test"):
@@ -245,11 +271,11 @@ def test_check_configuration():
         tmp_dir = Path(tmp_dir_)
 
         template_: ConfigTemplate = {
-            "a": {"isint": {}, "minmax": {"vmin": -1, "vmax": 1}},
-            "b": {"isint": {}},
-            "c": {"is_directory": {"create": False}},
-            "d": {"is_directory": {"create": True}},
-            "e": {},
+            "a": [ ("isint", {}), ("minmax", {"vmin": -1, "vmax": 1}) ],
+            "b": [ ("isint", {}) ],
+            "c": [ ("is_directory", {"create": False}) ],
+            "d": [ ("is_directory", {"create": True}) ],
+            "e": [],
         }
 
         template = _get_config_template(("nightskyrunner.config_checkers",), template_)
@@ -297,23 +323,23 @@ def test_check_configuration():
 
 def test_recursive_check_configuration():
 
-    sub1_template = ConfigTemplate = {"s11": {"isint": {}}, "s12": {"isint": {}}}
+    sub1_template = ConfigTemplate = {"s11": [ ("isint", {}), ("s12", {"isint": {}}) ]}
 
     sub2_template = ConfigTemplate = {
-        "s21": {"isint:{}"},
+        "s21": [ ("isint",{}) ],
         "s22": sub1_template,
-        "s23": {"isint:{}"},
+        "s23": [ ("isint",{}) ],
     }
 
     sub3_template = ConfigTemplate = {
-        "s31": {"isint": {}, "minmax": {"vmin": -1, "vmax": 1}}
+        "s31": [ ("isint", {}), ("minmax", {"vmin": -1, "vmax": 1}) ]
     }
 
     template_: ConfigTemplate = {
-        "a": {"isint": {}, "minmax": {"vmin": -1, "vmax": 1}},
+        "a": [ ("isint", {}), ("minmax", {"vmin": -1, "vmax": 1}) ],
         "s2": sub2_template,
         "s3": sub3_template,
-        "b": {"isint": {}},
+        "b": [ ("isint", {})],
     }
 
     template = _get_config_template(("nightskyrunner.config_checkers",), template_)
@@ -382,7 +408,7 @@ def test_runner_factory(get_tmp):
     """
     Tests for RunnerFactory
     """
-    
+
     @status_error
     class ThreadTestRunner(ThreadRunner):
         def __init__(
@@ -408,11 +434,11 @@ def test_runner_factory(get_tmp):
                 "c1": {isint: {}, minmax: {"vmin": -10, "vmax": +10}},
                 "c2": {isint: {}, minmax: {"vmin": -10, "vmax": +10}},
             }
-    
+
     tmp_dir = get_tmp
 
-    config_ok = ( {"c1": +2, "c2": -1}, True )
-    config_error = ( {"c1": +2, "c2": -6}, False )
+    config_ok = ({"c1": +2, "c2": -1}, True)
+    config_error = ({"c1": +2, "c2": -6}, False)
 
     config_path = tmp_dir / "config.toml"
 
@@ -429,12 +455,11 @@ def test_runner_factory(get_tmp):
     }
     with open(main_path, "w") as f:
         toml.dump(toml_content, f)
-        
+
     for config, ok in (config_ok, config_error):
 
         with open(config_path, "w+") as f:
             toml.dump(config, f)
-
 
         if ok:
             runner_factory = RunnerFactory(
@@ -446,7 +471,6 @@ def test_runner_factory(get_tmp):
             assert d["c1"] == config["c1"]
             assert d["c2"] == config["c2"]
 
-            
         else:
             with pytest.raises(ConfigError):
                 RunnerFactory(

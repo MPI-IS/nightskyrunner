@@ -7,10 +7,14 @@ import tempfile
 import toml
 import copy
 from pathlib import Path
-from typing import Generator, Any
+from typing import Generator
 from nightskyrunner.config_getter import StaticTomlFile, DynamicTomlFile
 from nightskyrunner.config import Config
-from nightskyrunner.config_check import ConfigTemplate
+from nightskyrunner.config_check import (
+    ConfigTemplate,
+    ConfigTemplateSpec,
+    CheckersTemplate,
+)
 from nightskyrunner.factories import _get_config_template, ModulePath
 from nightskyrunner.config_error import ConfigErrors, ConfigError
 
@@ -35,15 +39,15 @@ def get_config(
     valid configuration
     """
     modules = (ModulePath("nightskyrunner.config_checkers"),)
-    checks: dict[str, dict[str, dict[str, Any]]] = {
-        "isint": {},
-    }
-    config_template = {
+    checks: CheckersTemplate = [("isint", {})]
+    config_template: ConfigTemplateSpec = {
         "a": checks,
         "b": checks,
         "c": {"c1": checks, "c2": checks},
     }
+    print("get config template->")
     template = _get_config_template(modules, config_template)
+    print("<- get config template")
     config: Config = {"a": 1, "b": 10, "c": {"c1": -1, "c2": 3}}
     yield template, config
 
