@@ -1,3 +1,7 @@
+[![Python package](https://github.com/MPI-IS/nightskyrunner/actions/workflows/tests.yml/badge.svg)](https://github.com/MPI-IS/nightskyrunner/actions/workflows/tests.yml)
+[![PyPI version](https://img.shields.io/pypi/v/nightskyrunner.svg)](https://pypi.org/project/nightskyrunner/)
+
+
 > 🚧 **Under Construction**  
 > This project is currently under development. Please check back later for updates.
 
