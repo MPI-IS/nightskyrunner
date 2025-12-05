@@ -67,37 +67,6 @@ Dependency management with `poetry` is required for the installation of the opti
   poetry shell
   ```
 
-## Tests (only possible for setup with `poetry`, not with `pip`)
-
-
-To install `test` dependency group:
-```bash
-poetry install --with test
-```
-
-To run the tests:
-```bash
-python -m pytest
-```
-
-## Building the documentation (only possible for setup with `poetry`, not with `pip`)
-
-To install `doc` dependency group:
-```bash
-poetry install --with doc
-```
-
-To build the documentation:
-```bash
-mkdocs build  # will create a "site" subfolder with the html files
-```
-
-or
-
-```bash
-mkdocs serve  # will spawn a local server 
-```
-
 ## How to use
 
 ### (1) create subclass(es) of ThreadRunner or ProcessRunner
