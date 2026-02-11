@@ -70,21 +70,21 @@ class _Sleeper:
         """
         if self._previous is None:
             with self._lock:
-                self._previous = time.time()
+                self._previous = time.monotonic()
         while True:
             try:
                 with self._lock:
-                    if time.time() - self._previous > self._period:
+                    if time.monotonic() - self._previous > self._period:
                         break
                 for interrupt in self._interrupts:
                     if interrupt():
-                        self._previous = time.time()
+                        self._previous = time.monotonic()
                         return
                 time.sleep(1.0 / self._core_frequency)
             except KeyboardInterrupt:
                 self._keyboard_interrupted = True
                 break
-        self._previous = time.time()
+        self._previous = time.monotonic()
 
 
 def _clearer_error_message(e: Exception) -> str:
