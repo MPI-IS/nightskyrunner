@@ -3,6 +3,7 @@ Module defining the SharedMemory class.
 """
 
 import multiprocessing as mp
+import os
 from contextlib import contextmanager
 from multiprocessing import managers, sharedctypes
 from threading import Lock
@@ -123,6 +124,15 @@ class SharedMemory:
                 cls._memories.clear()
                 cls._manager.shutdown()
                 cls._manager = None
+
+
+def _reinit_shared_memory_lock():
+    """Reinitialize SharedMemory._lock in child processes after fork."""
+    SharedMemory._lock = Lock()
+
+
+if hasattr(os, 'register_at_fork'):
+    os.register_at_fork(after_in_child=_reinit_shared_memory_lock)
 
 
 @contextmanager
