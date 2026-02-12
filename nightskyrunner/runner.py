@@ -70,21 +70,21 @@ class _Sleeper:
         """
         if self._previous is None:
             with self._lock:
-                self._previous = time.time()
+                self._previous = time.monotonic()
         while True:
             try:
                 with self._lock:
-                    if time.time() - self._previous > self._period:
+                    if time.monotonic() - self._previous > self._period:
                         break
                 for interrupt in self._interrupts:
                     if interrupt():
-                        self._previous = time.time()
+                        self._previous = time.monotonic()
                         return
                 time.sleep(1.0 / self._core_frequency)
             except KeyboardInterrupt:
                 self._keyboard_interrupted = True
                 break
-        self._previous = time.time()
+        self._previous = time.monotonic()
 
 
 def _clearer_error_message(e: Exception) -> str:
@@ -335,7 +335,10 @@ class Runner(_Sleeper):
             self._frequency_iterate_error(e, True)
         else:
             self._status.state(State.running)
-        self._status.activity("sleep")
+        try:
+            self._status.activity("sleep")
+        except Exception as e:
+            self._frequency_iterate_error(e, False)
         try:
             self.wait()
         except Exception as e:
@@ -388,9 +391,12 @@ class ThreadRunner(Runner):
         self._monitor_stop(self._on_stop, blocking)
 
     def alive(self) -> bool:
-        if self._thread is None or not self._thread.is_alive():
+        try:
+            if self._thread is None or not self._thread.is_alive():
+                return False
+            return True
+        except Exception:
             return False
-        return True
 
     def revive(self):
         while self.alive():
@@ -449,7 +455,7 @@ class ProcessRunner(Runner):
         self._starting = True
         self._running.value = True
         with self._manage_starting():
-            if self._status.state != State.error:
+            if self._status.get_state() != State.error:
                 self._status.state(State.starting)
             self._process = Process(
                 target=self.run,
@@ -470,8 +476,11 @@ class ProcessRunner(Runner):
     def alive(self) -> bool:
         if self._process is None:
             return False
-        self._process.join(timeout=0.1)
-        return self._process.is_alive()
+        try:
+            self._process.join(timeout=0.1)
+            return self._process.is_alive()
+        except Exception:
+            return False
 
     def revive(self):
         self._starting = True
@@ -486,6 +495,9 @@ class ProcessRunner(Runner):
 
     def run(self, memories: Dict[str, DictProxy], running: MpValue) -> None:
         SharedMemory.set_all(memories)
+        # Reinitialize the _Sleeper lock in the child process to avoid
+        # potential deadlock from inheriting a locked copy after fork.
+        self._lock = threading.Lock()
         # note: running.value set to True by start and revive
         while running.value:  # type: ignore
             try:
